@@ -1,0 +1,92 @@
+name: Build and release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package ${{ matrix.artifact }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux
+            arch: x64
+            artifact: linux-x64
+            files: |
+              dist/*.AppImage
+              dist/*.deb
+              dist/*.rpm
+              dist/*.tar.gz
+          - runner: windows-latest
+            platform: win
+            arch: x64
+            artifact: windows-x64
+            files: |
+              dist/*.exe
+              dist/*.zip
+          - runner: macos-15-intel
+            platform: mac
+            arch: x64
+            artifact: macos-x64
+            files: |
+              dist/*.dmg
+              dist/*.zip
+          - runner: macos-latest
+            platform: mac
+            arch: arm64
+            artifact: macos-arm64
+            files: |
+              dist/*.dmg
+              dist/*.zip
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the application
+        run: npm run build
+
+      - name: Package for this platform
+        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release-assets/**/*

@@ -1,0 +1,42 @@
+appId: com.moodlescraper.app
+productName: UniPD Dispense
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**/*
+  - package.json
+asar: true
+extraResources:
+  - from: resources
+    to: .
+    filter:
+      - icon.png
+      - tray.png
+linux:
+  target:
+    - AppImage
+    - deb
+    - rpm
+    - tar.gz
+  category: Education
+  syncDesktopName: true
+  icon: resources/icon.png
+  artifactName: UniPD-Dispense-${version}-${arch}.${ext}
+win:
+  target:
+    - nsis
+    - zip
+  icon: resources/icon.png
+  artifactName: UniPD-Dispense-Setup-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+mac:
+  target:
+    - dmg
+    - zip
+  icon: resources/icon.png
+  category: public.app-category.education
+  artifactName: UniPD-Dispense-${version}-${arch}.${ext}
