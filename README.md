@@ -25,6 +25,8 @@ Scarica il file **.dmg**, aprilo e trascina l'app in Applicazioni. È disponibil
 
 Le build non sono firmate con certificati commerciali: Windows o macOS potrebbero mostrare un avviso per un'app scaricata da Internet. Scarica i file solo dalla pagina Releases di questo progetto e, se il sistema lo richiede, autorizza l'apertura dalle impostazioni di sicurezza.
 
+I pacchetti macOS usano una firma ad hoc per mantenere valida l'integrità del bundle anche su Apple Silicon. Questa firma non certifica l'identità dello sviluppatore e non sostituisce la notarizzazione Apple.
+
 ## Come funziona
 
 1. Avvia l'app e scegli la piattaforma Moodle UniPD usata dai tuoi corsi.
