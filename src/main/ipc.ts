@@ -75,6 +75,15 @@ export function registerIpc(dependencies: IpcDependencies): void {
   handle(IPC.authLogout, () => auth.logout())
   handle(IPC.coursesList, () => courses.list())
   handle(IPC.materialsList, () => materials.list())
+  handle(IPC.materialsRecentAdded, (_event, courseId) => {
+    if (
+      courseId !== null &&
+      (typeof courseId !== 'number' || !Number.isInteger(courseId) || courseId <= 0)
+    ) {
+      throw new Error('Corso non valido.')
+    }
+    return materials.recentAdded(courseId)
+  })
   handle(IPC.materialsOpen, (_event, relativePath, mode) => {
     if (typeof relativePath !== 'string') {
       throw new Error('Percorso del file non valido.')

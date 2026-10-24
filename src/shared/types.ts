@@ -176,6 +176,17 @@ export interface MaterialFile {
   managed: boolean
 }
 
+export interface RecentAddedFile {
+  courseId: number
+  courseName: string
+  filename: string
+  relativePath: string
+  sectionName: string
+  moduleName: string
+  moodleAddedAt: string | null
+  detectedAt: string
+}
+
 export interface AppInfo {
   name: string
   version: string

@@ -42,6 +42,7 @@ const api: DesktopApi = {
   },
   materials: {
     list: () => ipcRenderer.invoke(IPC.materialsList),
+    recentAdded: (courseId) => ipcRenderer.invoke(IPC.materialsRecentAdded, courseId),
     open: (relativePath, mode = 'default') =>
       ipcRenderer.invoke(IPC.materialsOpen, relativePath, mode),
     preview: (relativePath) => ipcRenderer.invoke(IPC.materialsPreview, relativePath)

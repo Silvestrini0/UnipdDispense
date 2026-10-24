@@ -11,6 +11,7 @@ import {
   SyncIcon
 } from './Icons'
 import { SyncCard } from './SyncCard'
+import { RecentFilesCard } from './RecentFilesCard'
 
 export function DashboardView(): JSX.Element {
   const auth = useAppStore((state) => state.auth)
@@ -78,6 +79,8 @@ export function DashboardView(): JSX.Element {
       </section>
 
       <SyncCard />
+
+      <RecentFilesCard />
 
       <div className="dashboard-grid">
         <section className="card vault-card">

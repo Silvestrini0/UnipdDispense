@@ -3,7 +3,7 @@ import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { BrowserWindow, shell } from 'electron'
 import type { SettingsStore } from './settings-store'
-import type { MaterialFile } from '../shared/types'
+import type { MaterialFile, RecentAddedFile } from '../shared/types'
 import type { ManifestEntry } from './sync/manifest'
 import { ManifestStore } from './sync/manifest'
 
@@ -89,6 +89,63 @@ export class MaterialsService {
       if (bySection !== 0) return bySection
       return left.filename.localeCompare(right.filename, 'it', { sensitivity: 'base' })
     })
+  }
+
+  async recentAdded(courseId: number | null): Promise<RecentAddedFile[]> {
+    const vaultPath = resolve(this.settings.get().vaultPath)
+    let root: string
+    try {
+      root = await realpath(vaultPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return []
+      }
+      throw error
+    }
+
+    const manifest = await new ManifestStore(root).load()
+    return Object.values(manifest.entries)
+      .filter((entry) => {
+        return (
+          entry.status === 'present' &&
+          entry.kind === 'file' &&
+          entry.category === 'material' &&
+          (courseId === null || entry.courseId === courseId)
+        )
+      })
+      .flatMap((entry) => {
+        const events = Array.isArray(entry.events) ? entry.events : []
+        const detectedAt = [...events]
+          .reverse()
+          .find(
+            (event) =>
+              event &&
+              event.type === 'added' &&
+              typeof event.at === 'string' &&
+              Number.isFinite(Date.parse(event.at))
+          )?.at
+        if (!detectedAt) {
+          return []
+        }
+        return [{
+          courseId: entry.courseId,
+          courseName: entry.courseName,
+          filename: entry.filename,
+          relativePath: entry.relativePath,
+          sectionName: entry.sectionName,
+          moduleName: entry.moduleName,
+          moodleAddedAt: entry.moodleAddedAt,
+          detectedAt
+        }]
+      })
+      .sort((left, right) => {
+        const leftMoodleDate = Date.parse(left.moodleAddedAt ?? '')
+        const rightMoodleDate = Date.parse(right.moodleAddedAt ?? '')
+        const leftDate = Number.isFinite(leftMoodleDate) ? leftMoodleDate : Date.parse(left.detectedAt)
+        const rightDate = Number.isFinite(rightMoodleDate) ? rightMoodleDate : Date.parse(right.detectedAt)
+        return rightDate - leftDate
+      })
+      .slice(0, 10)
   }
 
   async open(relativePath: string, mode: 'default' | 'folder'): Promise<void> {

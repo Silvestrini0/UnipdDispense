@@ -5,6 +5,7 @@ import type {
   AuthStatus,
   CourseSummary,
   MaterialFile,
+  RecentAddedFile,
   SettingsPatch,
   SyncOptions,
   SyncProgress,
@@ -29,6 +30,7 @@ export const IPC = {
   syncStatus: 'sync:status',
   syncProgress: 'sync:progress',
   materialsList: 'materials:list',
+  materialsRecentAdded: 'materials:recent-added',
   materialsOpen: 'materials:open',
   materialsPreview: 'materials:preview'
 } as const
@@ -57,6 +59,7 @@ export interface DesktopApi {
   }
   materials: {
     list: () => Promise<MaterialFile[]>
+    recentAdded: (courseId: number | null) => Promise<RecentAddedFile[]>
     open: (relativePath: string, mode?: 'default' | 'folder') => Promise<void>
     preview: (relativePath: string) => Promise<void>
   }
