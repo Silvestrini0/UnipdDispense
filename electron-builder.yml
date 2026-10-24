@@ -1,5 +1,5 @@
 appId: com.moodlescraper.app
-productName: UniPD Dispense
+productName: UnipdDispense
 directories:
   buildResources: resources
   output: dist
@@ -23,13 +23,13 @@ linux:
   category: Education
   syncDesktopName: true
   icon: resources/icon.png
-  artifactName: UniPD-Dispense-${version}-${arch}.${ext}
+  artifactName: UnipdDispense-${version}-${arch}.${ext}
 win:
   target:
     - nsis
     - zip
   icon: resources/icon.png
-  artifactName: UniPD-Dispense-Setup-${version}-${arch}.${ext}
+  artifactName: UnipdDispense-Setup-${version}-${arch}.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -40,4 +40,4 @@ mac:
     - zip
   icon: resources/icon.png
   category: public.app-category.education
-  artifactName: UniPD-Dispense-${version}-${arch}.${ext}
+  artifactName: UnipdDispense-${version}-${arch}.${ext}

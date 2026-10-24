@@ -11,7 +11,7 @@ vi.mock('../logger', () => ({
 let vault: string
 
 beforeEach(async () => {
-  vault = await mkdtemp(join(tmpdir(), 'moodlescraper-manifest-'))
+  vault = await mkdtemp(join(tmpdir(), 'unipddispense-manifest-'))
 })
 
 afterEach(async () => {

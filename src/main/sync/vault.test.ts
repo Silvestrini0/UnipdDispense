@@ -55,7 +55,7 @@ function noteEntry(overrides: Partial<ManifestEntry> = {}): ManifestEntry {
 
 describe('note del vault', () => {
   it('scrive la nota con frontmatter e corpo Markdown', async () => {
-    vault = await mkdtemp(join(tmpdir(), 'moodlescraper-vault-'))
+    vault = await mkdtemp(join(tmpdir(), 'unipddispense-vault-'))
     await writeNote(vault, noteEntry())
     const content = await readFile(join(vault, 'Corso/Sezione/Appunti/Appunti.md'), 'utf8')
     expect(content).toContain('moodle_type: "page"')

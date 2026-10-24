@@ -109,7 +109,7 @@ function labelModule(): MoodleModule {
 
 describe('SyncService note', () => {
   it('scrive note, mantiene lo skip e conserva le note rimosse', async () => {
-    vault = await mkdtemp(join(tmpdir(), 'moodlescraper-sync-'))
+    vault = await mkdtemp(join(tmpdir(), 'unipddispense-sync-'))
     const fetched: string[] = []
     let modules = [pageModule(), urlModule(), labelModule(), module()]
 
@@ -188,7 +188,7 @@ describe('SyncService note', () => {
 
 describe('SyncService riordino', () => {
   it('sposta i file nel nuovo layout senza riscaricarli', async () => {
-    vault = await mkdtemp(join(tmpdir(), 'moodlescraper-sync-'))
+    vault = await mkdtemp(join(tmpdir(), 'unipddispense-sync-'))
     const fetched: string[] = []
     const api = {
       getSiteInfo: async () => ({ userid: 1, siteurl: baseUrl }),

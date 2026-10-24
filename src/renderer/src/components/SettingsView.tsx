@@ -241,7 +241,7 @@ export function SettingsView(): JSX.Element {
           </dl>
           <button type="button" className="button button--ghost button--danger" onClick={() => void quit()}>
             <PowerIcon />
-            Esci da UniPD Dispense
+            Esci da UnipdDispense
           </button>
         </section>
       </div>

@@ -35,6 +35,8 @@ if (!gotSingleInstanceLock) {
   app.quit()
 } else {
   app.setName(APP_NAME)
+  // Keep the existing settings and encrypted session after the product rename.
+  app.setPath('userData', join(app.getPath('appData'), 'UniPD Dispense'))
   app.setAppUserModelId(APP_ID)
   configureKeyringBackend()
 
@@ -63,7 +65,7 @@ if (!gotSingleInstanceLock) {
     .catch((error) => {
       logger.error('Avvio non riuscito:', error)
       dialog.showErrorBox(
-        'UniPD Dispense',
+        APP_NAME,
         `Impossibile avviare l’applicazione.\n\n${error instanceof Error ? error.message : String(error)}`
       )
       app.quit()

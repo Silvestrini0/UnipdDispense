@@ -1,23 +1,23 @@
-# UniPD Dispense
+# UnipdDispense
 
-Applicazione desktop che sincronizza i materiali dei corsi Moodle dell'Università di Padova con una cartella locale, pronta da usare come vault Obsidian.
+UnipdDispense è un'applicazione desktop che sincronizza i materiali dei corsi Moodle dell'Università di Padova con una cartella locale, pronta da usare come vault Obsidian.
 
 > Progetto indipendente e non affiliato all'Università degli Studi di Padova.
 
 ## Installazione
 
-Scarica l'ultima versione dalla pagina [Releases](https://github.com/Silvestrini0/MoodleScraper/releases/latest). I pacchetti vengono generati per Linux, Windows e macOS quando viene pubblicata una release.
+Scarica l'ultima versione dalla pagina [Releases](https://github.com/Silvestrini0/UnipdDispense/releases/latest). I pacchetti vengono generati per Linux, Windows e macOS quando viene pubblicata una release.
 
 ### Linux
 
-- **AppImage:** scarica il file **.AppImage**, rendilo eseguibile dalle proprietà del file oppure esegui chmod +x UniPD-Dispense-*.AppImage, quindi avvialo.
-- **Debian e Ubuntu:** scarica il file **.deb** e installalo con sudo apt install ./UniPD-Dispense-*.deb dalla cartella in cui si trova.
-- **Fedora e distribuzioni compatibili:** scarica il file **.rpm** e installalo con sudo dnf install ./UniPD-Dispense-*.rpm.
+- **AppImage:** scarica il file **.AppImage**, rendilo eseguibile dalle proprietà del file oppure esegui chmod +x UnipdDispense-*.AppImage, quindi avvialo.
+- **Debian e Ubuntu:** scarica il file **.deb** e installalo con sudo apt install ./UnipdDispense-*.deb dalla cartella in cui si trova.
+- **Fedora e distribuzioni compatibili:** scarica il file **.rpm** e installalo con sudo dnf install ./UnipdDispense-*.rpm.
 - **Altre distribuzioni:** estrai il pacchetto **.tar.gz** e avvia l'applicazione contenuta nella cartella estratta.
 
 ### Windows
 
-Scarica e avvia **UniPD-Dispense-Setup-...-x64.exe** per installare l'app. In alternativa, estrai il file **.zip** ed esegui l'applicazione dalla cartella estratta.
+Scarica e avvia **UnipdDispense-Setup-...-x64.exe** per installare l'app. In alternativa, estrai il file **.zip** ed esegui l'applicazione dalla cartella estratta.
 
 ### macOS
 

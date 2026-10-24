@@ -1,4 +1,4 @@
-export const APP_NAME = 'UniPD Dispense'
+export const APP_NAME = 'UnipdDispense'
 export const APP_ID = 'com.moodlescraper.app'
 export const MOODLE_BASE_URL = 'https://elearning.unipd.it/dlm'
 export const MOODLE_AUTH_PARTITION = 'persist:moodle-auth'

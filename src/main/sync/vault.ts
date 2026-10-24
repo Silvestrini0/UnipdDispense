@@ -188,7 +188,7 @@ tags:
 
 # ${courseName}
 
-> [!info] Sincronizzato da UniPD Dispense
+> [!info] Sincronizzato da UnipdDispense
 > ${shortDate(generatedAt)} · ${present} file presenti · ${
     entries.length - present
   } rimossi

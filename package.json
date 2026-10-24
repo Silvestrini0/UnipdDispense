@@ -1,8 +1,8 @@
 {
-  "name": "moodlescraper",
-  "version": "0.1.2",
-  "description": "Sync automatico dei materiali Moodle UniPD in un vault Obsidian",
-  "desktopName": "unipd-dispense",
+  "name": "unipddispense",
+  "version": "0.1.3",
+  "description": "UnipdDispense sincronizza i materiali Moodle UniPD in un vault Obsidian",
+  "desktopName": "unipddispense",
   "main": "./out/main/index.js",
   "author": "Silvestrini0",
   "license": "MIT",

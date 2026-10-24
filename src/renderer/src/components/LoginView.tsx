@@ -24,7 +24,7 @@ export function LoginView(): JSX.Element {
       <section className="login-hero">
         <Logo />
         <div className="login-hero__body">
-          <span className="eyebrow">UniPD Dispense</span>
+          <span className="eyebrow">UnipdDispense</span>
           <h1>
             I tuoi materiali,
             <br />

@@ -39,7 +39,7 @@ export function createAppTray({
     tray.setContextMenu(
       Menu.buildFromTemplate([
         {
-          label: 'Apri UniPD Dispense',
+          label: 'Apri UnipdDispense',
           click: showWindow
         },
         {

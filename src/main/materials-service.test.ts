@@ -34,8 +34,8 @@ let outside: string
 let service: MaterialsService
 
 beforeEach(async () => {
-  vault = await mkdtemp(join(tmpdir(), 'moodlescraper-materials-'))
-  outside = await mkdtemp(join(tmpdir(), 'moodlescraper-outside-'))
+  vault = await mkdtemp(join(tmpdir(), 'unipddispense-materials-'))
+  outside = await mkdtemp(join(tmpdir(), 'unipddispense-outside-'))
   service = new MaterialsService(
     { get: () => ({ vaultPath: vault }) } as unknown as SettingsStore,
     () => null
