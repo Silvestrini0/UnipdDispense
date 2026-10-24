@@ -1,6 +1,6 @@
 {
   "name": "moodlescraper",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Sync automatico dei materiali Moodle UniPD in un vault Obsidian",
   "desktopName": "unipd-dispense",
   "main": "./out/main/index.js",

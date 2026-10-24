@@ -14,6 +14,7 @@ extraResources:
       - icon.png
       - tray.png
 linux:
+  maintainer: Silvestrini0
   target:
     - AppImage
     - deb
