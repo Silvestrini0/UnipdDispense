@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -107,10 +107,12 @@ describe('MaterialsService', () => {
     await writeFile(join(vault, 'Corso/Materiali/pagina.html'), '<script></script>')
     await writeFile(join(outside, 'fuori.pdf'), 'outside')
     await symlink(join(outside, 'fuori.pdf'), join(vault, 'Corso/Materiali/link.pdf'))
+    // macOS resolves /var to /private/var when validating the vault path.
+    const realVault = await realpath(vault)
     await service.open('Corso/Materiali/appunti.pdf', 'default')
-    expect(mocks.openPath).toHaveBeenCalledWith(join(vault, 'Corso/Materiali/appunti.pdf'))
+    expect(mocks.openPath).toHaveBeenCalledWith(join(realVault, 'Corso/Materiali/appunti.pdf'))
     await service.open('Corso/Materiali/appunti.pdf', 'folder')
-    expect(mocks.openPath).toHaveBeenLastCalledWith(join(vault, 'Corso/Materiali'))
+    expect(mocks.openPath).toHaveBeenLastCalledWith(join(realVault, 'Corso/Materiali'))
     await expect(service.open('../outside.pdf', 'default')).rejects.toThrow('Percorso del file non valido')
     await expect(service.open('Corso/Materiali/run.sh', 'default')).rejects.toThrow('non può essere aperto')
     await expect(service.open('Corso/Materiali/pagina.html', 'default')).rejects.toThrow('non può essere aperto')

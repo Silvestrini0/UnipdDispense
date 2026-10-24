@@ -35,6 +35,9 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
 mac:
+  # Re-sign the packaged Electron bundle even without an Apple certificate.
+  # Otherwise its original linker signature is invalid after packaging on arm64.
+  identity: '-'
   target:
     - dmg
     - zip
