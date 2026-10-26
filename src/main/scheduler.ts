@@ -35,6 +35,9 @@ export class SyncScheduler {
     if (!settings.autoSync) {
       return
     }
+    if (this.sync.getProgress().phase === 'paused') {
+      return
+    }
     if (this.auth.getStatus().state !== 'authenticated') {
       return
     }
@@ -57,6 +60,9 @@ export class SyncScheduler {
 
   private async tick(): Promise<void> {
     if (this.stopped) {
+      return
+    }
+    if (this.sync.getProgress().phase === 'paused') {
       return
     }
     const settings = this.settings.get()

@@ -49,6 +49,10 @@ const api: DesktopApi = {
   },
   sync: {
     start: (options) => ipcRenderer.invoke(IPC.syncStart, options),
+    listUnselectedCourseFolders: (courseIds) =>
+      ipcRenderer.invoke(IPC.syncListUnselectedCourseFolders, courseIds),
+    stop: () => ipcRenderer.invoke(IPC.syncStop),
+    chooseFreshLocation: () => ipcRenderer.invoke(IPC.syncChooseFreshLocation),
     getStatus: () => ipcRenderer.invoke(IPC.syncStatus),
     onProgress: (callback) =>
       subscribe<SyncProgress>(IPC.syncProgress, callback)

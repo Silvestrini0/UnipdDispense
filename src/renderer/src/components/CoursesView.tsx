@@ -27,6 +27,7 @@ export function CoursesView(): JSX.Element {
   const refreshCourses = useAppStore((state) => state.refreshCourses)
   const startSync = useAppStore((state) => state.startSync)
   const [search, setSearch] = useState('')
+  const [keptCourseIds, setKeptCourseIds] = useState<Set<number>>(() => new Set())
 
   const allMode = settings?.syncAllCourses ?? true
   const selectedIds = settings?.selectedCourseIds ?? []
@@ -79,15 +80,46 @@ export function CoursesView(): JSX.Element {
     }
   }
 
-  const syncSelection = (): void => {
-    if (!hasSelection) {
+  const syncSelection = async (): Promise<void> => {
+    if (!hasSelection || settingsSaving) {
       return
     }
-    if (allMode) {
-      void startSync({ reason: 'manual' })
-    } else {
-      void startSync({ reason: 'manual', courseIds: selectedIds })
+    const courseIds = allMode
+      ? courses.map((course) => course.id)
+      : courses.filter((course) => selectedSet.has(course.id)).map((course) => course.id)
+    const keptIds = new Set(keptCourseIds)
+    for (const courseId of courseIds) keptIds.delete(courseId)
+    setKeptCourseIds(keptIds)
+    let deleteCourseIds: number[] = []
+    if (!allMode) {
+      try {
+        const unselectedFolders = (
+          await window.api.sync.listUnselectedCourseFolders(courseIds)
+        ).filter((course) => !keptIds.has(course.courseId))
+        if (unselectedFolders.length > 0) {
+          const names = unselectedFolders.map((course) => `• ${course.courseName}`).join('\n')
+          const confirmed = window.confirm(
+            `Vuoi eliminare le cartelle dei corsi rimossi dalla selezione?\n\n${names}\n\n` +
+              'Verranno eliminati anche tutti i file contenuti in queste cartelle.'
+          )
+          if (confirmed) {
+            deleteCourseIds = unselectedFolders.map((course) => course.courseId)
+          } else {
+            setKeptCourseIds(
+              (current) =>
+                new Set([...current, ...unselectedFolders.map((course) => course.courseId)])
+            )
+          }
+        }
+      } catch {
+        // The sync still proceeds; stale folders remain untouched if they cannot be listed.
+      }
     }
+    await startSync({
+      reason: 'manual',
+      courseIds,
+      ...(deleteCourseIds.length ? { deleteCourseIds } : {})
+    })
   }
 
   return (
@@ -123,8 +155,8 @@ export function CoursesView(): JSX.Element {
           <button
             type="button"
             className="button button--primary"
-            onClick={syncSelection}
-            disabled={sync.running || !hasSelection}
+            onClick={() => void syncSelection()}
+            disabled={sync.running || settingsSaving || !hasSelection}
           >
             <SyncIcon className={sync.running ? 'spin' : undefined} />
             {sync.running ? 'Sincronizzazione…' : 'Sincronizza selezione'}

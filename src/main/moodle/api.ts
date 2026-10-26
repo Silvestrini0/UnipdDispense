@@ -53,7 +53,7 @@ export class MoodleApi {
     })
   }
 
-  async fetchFile(fileUrl: string): Promise<Response> {
+  async fetchFile(fileUrl: string, signal?: AbortSignal): Promise<Response> {
     const url = new URL(fileUrl)
     const base = new URL(this.baseUrl)
     if (url.origin !== base.origin) {
@@ -73,7 +73,9 @@ export class MoodleApi {
     }
     const response = await this.fetchImpl(url, {
       redirect: 'follow',
-      signal: AbortSignal.timeout(60_000)
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(60_000)])
+        : AbortSignal.timeout(60_000)
     })
     if (!response.ok) {
       throw new MoodleApiError(

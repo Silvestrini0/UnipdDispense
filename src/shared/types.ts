@@ -3,6 +3,11 @@ export const APP_ID = 'com.moodlescraper.app'
 export const MOODLE_BASE_URL = 'https://elearning.unipd.it/dlm'
 export const MOODLE_AUTH_PARTITION = 'persist:moodle-auth'
 export const AUTH_URL_SCHEME = 'moodle-vault'
+export const THEME_MODES = ['light', 'dark'] as const
+export const ACCENT_COLORS = ['blue', 'green', 'pink', 'purple', 'orange', 'yellow', 'teal'] as const
+
+export type ThemeMode = (typeof THEME_MODES)[number]
+export type AccentColor = (typeof ACCENT_COLORS)[number]
 
 export interface MoodlePlatform {
   id: string
@@ -77,6 +82,9 @@ export interface AuthStatus {
 export interface AppSettings {
   vaultPath: string
   moodleBaseUrl: string
+  themeMode: ThemeMode
+  accentColor: AccentColor
+  personalizationCompleted: boolean
   syncIntervalMinutes: number
   autoSync: boolean
   launchAtLogin: boolean
@@ -90,6 +98,9 @@ export type SettingsPatch = Partial<
     AppSettings,
     | 'vaultPath'
     | 'moodleBaseUrl'
+    | 'themeMode'
+    | 'accentColor'
+    | 'personalizationCompleted'
     | 'syncIntervalMinutes'
     | 'autoSync'
     | 'launchAtLogin'
@@ -116,6 +127,7 @@ export type SyncPhase =
   | 'scanning'
   | 'downloading'
   | 'finalizing'
+  | 'paused'
   | 'completed'
   | 'error'
 
@@ -131,6 +143,8 @@ export interface SyncProgress {
   downloaded: number
   skipped: number
   removed: number
+  backedUp: number
+  localChanges: number
   errors: number
   startedAt: string | null
   finishedAt: string | null
@@ -138,7 +152,15 @@ export interface SyncProgress {
 
 export interface SyncOptions {
   courseIds?: number[]
+  deleteCourseIds?: number[]
   reason?: 'manual' | 'scheduled' | 'startup'
+  freshCopyRoot?: string
+}
+
+export interface CourseFolderToDelete {
+  courseId: number
+  courseName: string
+  courseFolder: string
 }
 
 export interface SyncIssue {
@@ -150,9 +172,13 @@ export interface SyncResult {
   downloaded: number
   skipped: number
   removed: number
+  backedUp: number
+  localChanges: number
   errors: SyncIssue[]
   courses: number
+  deletedCourses?: number
   finishedAt: string
+  paused?: boolean
 }
 
 export type MaterialCategory = 'material' | 'info'

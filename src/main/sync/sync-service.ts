@@ -1,18 +1,23 @@
 import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
+import { createReadStream, createWriteStream } from 'node:fs'
 import {
+  copyFile,
   mkdir,
+  readFile,
   readdir,
+  lstat,
+  realpath,
   rename,
   rm,
   stat,
   utimes
 } from 'node:fs/promises'
-import { dirname, relative, resolve, sep } from 'node:path'
-import { Readable } from 'node:stream'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type {
   AppSettings,
+  CourseFolderToDelete,
   SyncOptions,
   SyncProgress,
   SyncResult
@@ -39,6 +44,7 @@ import {
   sidecarExists,
   sidecarPathFor,
   writeCourseIndexes,
+  renderNote,
   writeNote,
   writeSidecar
 } from './vault'
@@ -56,6 +62,8 @@ function initialProgress(): SyncProgress {
     downloaded: 0,
     skipped: 0,
     removed: 0,
+    backedUp: 0,
+    localChanges: 0,
     errors: 0,
     startedAt: null,
     finishedAt: null
@@ -67,6 +75,8 @@ type ProgressListener = (progress: SyncProgress) => void
 export class SyncService {
   private state: SyncProgress = initialProgress()
   private runPromise: Promise<SyncResult> | null = null
+  private stopRequested = false
+  private activeAbortController: AbortController | null = null
   private readonly listeners = new Set<ProgressListener>()
 
   constructor(
@@ -78,6 +88,46 @@ export class SyncService {
     return structuredClone(this.state)
   }
 
+  async listUnselectedCourseFolders(
+    courseIds: number[]
+  ): Promise<CourseFolderToDelete[]> {
+    const vaultPath = resolve(this.settings.get().vaultPath)
+    const manifest = await new ManifestStore(vaultPath).load()
+    const selectedIds = new Set(courseIds)
+    const folders = new Map<number, CourseFolderToDelete>()
+    for (const entry of Object.values(manifest.entries)) {
+      if (selectedIds.has(entry.courseId) || folders.has(entry.courseId)) continue
+      const path = courseFolderPath(vaultPath, entry.courseFolder)
+      try {
+        const info = await lstat(path)
+        if (!info.isDirectory() || info.isSymbolicLink()) continue
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+        throw error
+      }
+      folders.set(entry.courseId, {
+        courseId: entry.courseId,
+        courseName: entry.courseName,
+        courseFolder: entry.courseFolder
+      })
+    }
+    return [...folders.values()].sort((left, right) =>
+      left.courseName.localeCompare(right.courseName, 'it', { sensitivity: 'base' })
+    )
+  }
+
+  async restoreInterruptedState(): Promise<void> {
+    const vaultPath = resolve(this.settings.get().vaultPath)
+    const manifest = await new ManifestStore(vaultPath).load()
+    if (manifest.interrupted) {
+      this.update({
+        ...initialProgress(),
+        phase: 'paused',
+        message: 'La sincronizzazione precedente si è interrotta. Puoi riprenderla: i file già completati verranno mantenuti.'
+      })
+    }
+  }
+
   onProgress(listener: ProgressListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -85,6 +135,11 @@ export class SyncService {
 
   start(options: SyncOptions = {}): Promise<SyncResult> {
     if (this.runPromise) {
+      if (options.freshCopyRoot) {
+        return Promise.reject(
+          new Error('Ferma la sincronizzazione in corso prima di creare una nuova copia.')
+        )
+      }
       return this.runPromise
     }
     this.runPromise = this.run(options).finally(() => {
@@ -93,7 +148,18 @@ export class SyncService {
     return this.runPromise
   }
 
+  stop(): boolean {
+    if (!this.state.running || this.state.phase === 'finalizing') {
+      return false
+    }
+    this.stopRequested = true
+    this.activeAbortController?.abort()
+    this.update({ message: 'Arresto in corso… salvo i file già completati.' })
+    return true
+  }
+
   private async run(options: SyncOptions): Promise<SyncResult> {
+    this.stopRequested = false
     const startedAt = new Date().toISOString()
     this.update({
       ...initialProgress(),
@@ -104,6 +170,16 @@ export class SyncService {
     })
     try {
       const result = await this.execute(options)
+      if (result.paused) {
+        this.update({
+          running: false,
+          phase: 'paused',
+          message: 'Sincronizzazione fermata. I file completati sono al sicuro; puoi riprenderla quando vuoi.',
+          currentFile: null,
+          finishedAt: result.finishedAt
+        })
+        return result
+      }
       await this.settings.update({ lastSyncAt: result.finishedAt }).catch((error) => {
         logger.warn('Impossibile salvare lastSyncAt:', errorMessage(error))
       })
@@ -130,9 +206,23 @@ export class SyncService {
   }
 
   private async execute(options: SyncOptions): Promise<SyncResult> {
-    const settings = this.settings.get()
-    const vaultPath = resolve(settings.vaultPath)
+    let settings = this.settings.get()
+    let vaultPath = resolve(settings.vaultPath)
+    if (options.freshCopyRoot) {
+      const targetPath = await createFreshVaultPath(
+        options.freshCopyRoot,
+        vaultPath
+      )
+      settings = await this.settings.update({ vaultPath: targetPath, lastSyncAt: null })
+      vaultPath = resolve(targetPath)
+      logger.info(`Nuova copia dei materiali in ${vaultPath}.`)
+    }
     await mkdir(vaultPath, { recursive: true })
+    await cleanupInterruptedDownloads(vaultPath)
+    const manifestStore = new ManifestStore(vaultPath)
+    const manifest = await manifestStore.load()
+    manifest.interrupted = true
+    await manifestStore.save(manifest)
     return this.auth.withApi((api) =>
       this.syncWithApi(api, vaultPath, settings, options)
     )
@@ -144,7 +234,31 @@ export class SyncService {
     settings: AppSettings,
     options: SyncOptions
   ): Promise<SyncResult> {
+    const prepared: CourseSyncPlan[] = []
+    const errors: SyncResult['errors'] = []
+    let total = 0
+    let processed = 0
+    let downloaded = 0
+    let skipped = 0
+    let removed = 0
+    let backedUp = 0
+    let localChanges = 0
+    let deletedCourses = 0
+    const makeResult = (paused = false): SyncResult => ({
+      downloaded,
+      skipped,
+      removed,
+      backedUp,
+      localChanges,
+      errors,
+      courses: prepared.length,
+      ...(deletedCourses > 0 ? { deletedCourses } : {}),
+      finishedAt: new Date().toISOString(),
+      ...(paused ? { paused: true } : {})
+    })
+
     const siteInfo = await api.getSiteInfo()
+    if (this.stopRequested) return makeResult(true)
     const hasEnrolFunction = Array.isArray(siteInfo.functions)
       ? siteInfo.functions.some((fn) => fn.name === 'core_enrol_get_users_courses')
       : null
@@ -156,6 +270,7 @@ export class SyncService {
     )
     const siteUrl = siteInfo.siteurl || 'https://elearning.unipd.it/dlm'
     const allCourses = await api.getUsersCourses(siteInfo.userid)
+    if (this.stopRequested) return makeResult(true)
     logger.info(`Moodle: ${allCourses.length} corsi iscritti.`)
     const firstCourse = allCourses[0]
     if (firstCourse) {
@@ -184,15 +299,8 @@ export class SyncService {
     const manifestStore = new ManifestStore(vaultPath)
     const manifest = await manifestStore.load()
     const folderAssignments = courseFolderAssignments(courses)
-    const prepared: CourseSyncPlan[] = []
-    const errors: SyncResult['errors'] = []
-    let total = 0
-    let processed = 0
-    let downloaded = 0
-    let skipped = 0
-    let removed = 0
-
     for (const course of courses) {
+      if (this.stopRequested) return makeResult(true)
       this.update({
         phase: 'scanning',
         courseId: course.id,
@@ -201,6 +309,7 @@ export class SyncService {
       })
       try {
         const sections = await api.getCourseContents(course.id)
+        if (this.stopRequested) return makeResult(true)
         const courseFolder = folderAssignments.get(course.id) ?? `Corso ${course.id}`
         const existingPathKeys = await existingPathKeysForCourse(
           manifest,
@@ -222,6 +331,7 @@ export class SyncService {
           message: `${course.displayname || course.fullname}: ${plan.files.length} file trovati.`
         })
       } catch (error) {
+        if (this.stopRequested) return makeResult(true)
         if (isAuthenticationError(error)) {
           throw error
         }
@@ -243,9 +353,8 @@ export class SyncService {
       total
     })
 
-    const changedKeys = new Set<string>()
-
     for (const plan of prepared) {
+      if (this.stopRequested) return makeResult(true)
       const courseName = plan.course.displayname || plan.course.fullname
       this.update({
         courseId: plan.course.id,
@@ -253,6 +362,7 @@ export class SyncService {
         message: `Sincronizzazione di ${courseName}…`
       })
       for (const file of plan.files) {
+        if (this.stopRequested) return makeResult(true)
         this.update({ currentFile: file.relativePath })
         try {
           const existing = manifest.entries[file.key]
@@ -264,10 +374,10 @@ export class SyncService {
           const moved =
             existing !== undefined &&
             existing.relativePath !== file.relativePath &&
-            (await this.moveExisting(vaultPath, existing, file))
+            (await this.moveExisting(vaultPath, existing, file, manifest))
           if (moved && existing) {
             skipped += 1
-            manifest.entries[file.key] = this.buildEntry(
+            const movedEntry = this.buildEntry(
               plan,
               file,
               existing,
@@ -275,8 +385,16 @@ export class SyncService {
               existing.downloadedAt,
               false
             )
-            changedKeys.add(file.key)
-          } else if (await this.canSkip(vaultPath, file, existing)) {
+            movedEntry.pendingNoteUpdate = file.kind === 'note'
+            movedEntry.pendingSidecarUpdate = file.kind === 'file'
+            manifest.entries[file.key] = movedEntry
+          } else if (
+            existing &&
+            (await this.hasUnchangedLocalEdits(vaultPath, file, existing, manifest))
+          ) {
+            skipped += 1
+            localChanges += 1
+          } else if (await this.canSkip(vaultPath, file, existing, manifest)) {
             skipped += 1
             if (file.kind === 'note' && !file.noteBody) {
               file.noteBody = existing?.noteBody ?? undefined
@@ -297,26 +415,47 @@ export class SyncService {
                 file.contentHash = noteContentHash(file) ?? undefined
               }
               entry = this.buildEntry(plan, file, existing, now, now, true)
+              if (existing && (await this.noteWasEdited(vaultPath, existing, manifest))) {
+                await this.backupLocalFile(vaultPath, existing.relativePath)
+                backedUp += 1
+              }
               await writeNote(vaultPath, entry)
+              manifest.generatedHashes ??= {}
+              manifest.generatedHashes[`note:${entry.key}`] = await hashFile(
+                absoluteFromRelative(vaultPath, entry.relativePath)
+              )
             } else {
-              await this.downloadFile(api, vaultPath, file)
+              const download = await this.downloadFile(api, vaultPath, file, existing)
               entry = this.buildEntry(plan, file, existing, now, now, true)
+              entry.downloadHash = download.hash
+              if (download.backedUp) backedUp += 1
             }
             downloaded += 1
+            if (file.kind === 'file') {
+              entry.pendingSidecarUpdate = true
+            } else {
+              entry.pendingNoteUpdate = false
+            }
             manifest.entries[file.key] = entry
-            changedKeys.add(file.key)
             if (existing && existing.relativePath !== entry.relativePath) {
+              if (existing.kind === 'file' && await this.backupIfLocalFileChanged(vaultPath, existing)) {
+                backedUp += 1
+              }
               await this.removeMovedFile(vaultPath, existing)
             }
           }
           processed += 1
+          await manifestStore.save(manifest)
           this.update({
             processed,
             downloaded,
             skipped,
-            errors: errors.length
+            errors: errors.length,
+            backedUp,
+            localChanges
           })
         } catch (error) {
+          if (this.stopRequested) return makeResult(true)
           if (isAuthenticationError(error)) {
             throw error
           }
@@ -327,16 +466,19 @@ export class SyncService {
         }
       }
 
+      if (this.stopRequested) return makeResult(true)
+
       const newlyRemoved = markRemovedFiles(
         manifest,
         plan,
-        new Date().toISOString(),
-        changedKeys
+        new Date().toISOString()
       )
       removed += newlyRemoved
       this.update({ removed, currentFile: null, errors: errors.length })
       await manifestStore.save(manifest)
     }
+
+    if (this.stopRequested) return makeResult(true)
 
     this.update({
       phase: 'finalizing',
@@ -352,11 +494,17 @@ export class SyncService {
         continue
       }
       if (entry.kind === 'note') {
-        if (!changedKeys.has(entry.key)) {
+        if (!entry.pendingNoteUpdate) {
           continue
         }
         try {
-          await writeNote(vaultPath, entry)
+          backedUp += await this.writeManagedFiles(
+            vaultPath,
+            manifest,
+            [{ path: entry.relativePath, key: `note:${entry.key}` }],
+            () => writeNote(vaultPath, entry)
+          )
+          entry.pendingNoteUpdate = false
         } catch (error) {
           errors.push({
             path: entry.relativePath,
@@ -365,9 +513,15 @@ export class SyncService {
         }
         continue
       }
-      if (changedKeys.has(entry.key) || !(await sidecarExists(vaultPath, entry))) {
+      if (entry.pendingSidecarUpdate || !(await sidecarExists(vaultPath, entry))) {
         try {
-          await writeSidecar(vaultPath, entry)
+          backedUp += await this.writeManagedFiles(
+            vaultPath,
+            manifest,
+            [{ path: entry.sidecarPath, key: `sidecar:${entry.key}` }],
+            () => writeSidecar(vaultPath, entry)
+          )
+          entry.pendingSidecarUpdate = false
         } catch (error) {
           errors.push({
             path: entry.sidecarPath,
@@ -381,7 +535,20 @@ export class SyncService {
         (entry) => entry.courseId === plan.course.id
       )
       try {
-        await writeCourseIndexes(vaultPath, courseEntries)
+        const entries = courseEntries[0]
+        if (!entries) continue
+        backedUp += await this.writeManagedFiles(
+          vaultPath,
+          manifest,
+          [
+            { path: `${entries.courseFolder}/Indice corso.md`, key: `index:${plan.course.id}` },
+            {
+              path: `${entries.courseFolder}/Rimossi da Moodle.md`,
+              key: `removed-index:${plan.course.id}`
+            }
+          ],
+          () => writeCourseIndexes(vaultPath, courseEntries)
+        )
       } catch (error) {
         errors.push({
           path: plan.courseFolder,
@@ -389,21 +556,61 @@ export class SyncService {
         })
       }
     }
+    const requestedDeletions = new Set(options.deleteCourseIds ?? [])
+    const selectedCourseIds = new Set(courses.map((course) => course.id))
+    const deletions = new Map<number, string>()
+    for (const entry of Object.values(manifest.entries)) {
+      if (
+        !requestedDeletions.has(entry.courseId) ||
+        selectedCourseIds.has(entry.courseId)
+      ) continue
+      deletions.set(entry.courseId, entry.courseFolder)
+    }
+    for (const courseFolder of new Set(deletions.values())) {
+      const sharedWithSelected = Object.values(manifest.entries).some(
+        (entry) => entry.courseFolder === courseFolder && selectedCourseIds.has(entry.courseId)
+      )
+      if (sharedWithSelected) continue
+      const folderPath = courseFolderPath(vaultPath, courseFolder)
+      try {
+        const info = await lstat(folderPath)
+        if (!info.isDirectory() || info.isSymbolicLink()) continue
+        await rm(folderPath, { recursive: true, force: true })
+        const removedCourseIds = new Set<number>()
+        for (const [key, entry] of Object.entries(manifest.entries)) {
+          if (
+            entry.courseFolder !== courseFolder ||
+            selectedCourseIds.has(entry.courseId)
+          ) continue
+          removedCourseIds.add(entry.courseId)
+          delete manifest.entries[key]
+          delete manifest.generatedHashes?.[`note:${entry.key}`]
+          delete manifest.generatedHashes?.[`sidecar:${entry.key}`]
+        }
+        for (const removedCourseId of removedCourseIds) {
+          delete manifest.generatedHashes?.[`index:${removedCourseId}`]
+          delete manifest.generatedHashes?.[`removed-index:${removedCourseId}`]
+        }
+        deletedCourses += removedCourseIds.size
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          errors.push({
+            path: courseFolder,
+            message: `Cartella non eliminata: ${errorMessage(error)}`
+          })
+        }
+      }
+    }
     await manifestStore.save(manifest)
 
     const finishedAt = new Date().toISOString()
-    this.update({ errors: errors.length })
+    manifest.interrupted = false
+    await manifestStore.save(manifest)
+    this.update({ errors: errors.length, backedUp, localChanges })
     logger.info(
-      `Sync completata: ${prepared.length} corsi, ${downloaded} scaricati, ${skipped} invariati, ${removed} rimossi, ${errors.length} errori (${shortDate(finishedAt)}).`
+      `Sync completata: ${prepared.length} corsi, ${downloaded} scaricati, ${skipped} invariati, ${removed} rimossi, ${backedUp} copie di sicurezza, ${localChanges} modifiche locali mantenute, ${errors.length} errori (${shortDate(finishedAt)}).`
     )
-    return {
-      downloaded,
-      skipped,
-      removed,
-      errors,
-      courses: prepared.length,
-      finishedAt
-    }
+    return { ...makeResult(false), finishedAt }
   }
 
   private renderInlineNote(file: SyncFilePlan, baseUrl: string): string {
@@ -432,14 +639,21 @@ export class SyncService {
     if (!file.content.fileurl) {
       throw new Error('URL del contenuto assente.')
     }
-    const response = await api.fetchFile(file.content.fileurl)
-    return htmlToMarkdown(await response.text(), baseUrl)
+    const controller = new AbortController()
+    this.activeAbortController = controller
+    try {
+      const response = await api.fetchFile(file.content.fileurl, controller.signal)
+      return htmlToMarkdown(await response.text(), baseUrl)
+    } finally {
+      this.activeAbortController = null
+    }
   }
 
   private async canSkip(
     vaultPath: string,
     file: SyncFilePlan,
-    existing: ManifestEntry | undefined
+    existing: ManifestEntry | undefined,
+    manifest: SyncManifest
   ): Promise<boolean> {
     if (
       !existing ||
@@ -462,6 +676,9 @@ export class SyncService {
       return false
     }
     if (file.kind === 'note') {
+      if (await this.noteWasEdited(vaultPath, existing, manifest)) {
+        return false
+      }
       if (file.note?.mode === 'inline') {
         return Boolean(file.contentHash) && existing.contentHash === file.contentHash
       }
@@ -473,12 +690,61 @@ export class SyncService {
     return file.size <= 0 || localSize === file.size
   }
 
+  private async hasUnchangedLocalEdits(
+    vaultPath: string,
+    file: SyncFilePlan,
+    existing: ManifestEntry,
+    manifest: SyncManifest
+  ): Promise<boolean> {
+    if (
+      existing.status !== 'present' ||
+      existing.kind !== file.kind ||
+      existing.relativePath !== file.relativePath ||
+      existing.moodleModifiedAt !== file.moodleModifiedAt ||
+      existing.sourcePath !== file.sourcePath ||
+      (file.kind === 'note' && file.contentHash && existing.contentHash !== file.contentHash)
+    ) {
+      return false
+    }
+    if (file.kind === 'note') {
+      return this.noteWasEdited(vaultPath, existing, manifest)
+    }
+    const target = absoluteFromRelative(vaultPath, file.relativePath)
+    try {
+      const info = await stat(target)
+      if (!info.isFile()) return false
+      if (existing.downloadHash) {
+        return (await hashFile(target)) !== existing.downloadHash
+      }
+      return info.size !== file.size
+    } catch {
+      return false
+    }
+  }
+
+  private async noteWasEdited(
+    vaultPath: string,
+    existing: ManifestEntry,
+    manifest?: SyncManifest
+  ): Promise<boolean> {
+    try {
+      const path = absoluteFromRelative(vaultPath, existing.relativePath)
+      const expectedHash = manifest?.generatedHashes?.[`note:${existing.key}`]
+      if (expectedHash) return (await hashFile(path)) !== expectedHash
+      const current = await readFile(path, 'utf8')
+      return current !== renderNote(existing)
+    } catch {
+      return false
+    }
+  }
+
   private async moveExisting(
     vaultPath: string,
     existing: ManifestEntry,
-    file: SyncFilePlan
+    file: SyncFilePlan,
+    manifest: SyncManifest
   ): Promise<boolean> {
-    if (!(await this.canRelocate(vaultPath, existing, file))) {
+    if (!(await this.canRelocate(vaultPath, existing, file, manifest))) {
       return false
     }
     try {
@@ -518,7 +784,8 @@ export class SyncService {
   private async canRelocate(
     vaultPath: string,
     existing: ManifestEntry,
-    file: SyncFilePlan
+    file: SyncFilePlan,
+    manifest: SyncManifest
   ): Promise<boolean> {
     if (
       existing.kind !== file.kind ||
@@ -528,6 +795,9 @@ export class SyncService {
       return false
     }
     if (file.kind === 'note') {
+      if (await this.noteWasEdited(vaultPath, existing, manifest)) {
+        return false
+      }
       if (file.note?.mode === 'inline') {
         return Boolean(file.contentHash) && existing.contentHash === file.contentHash
       }
@@ -541,6 +811,13 @@ export class SyncService {
       if (!info.isFile()) {
         return false
       }
+      if (
+        existing.downloadHash &&
+        (await hashFile(absoluteFromRelative(vaultPath, existing.relativePath))) !==
+          existing.downloadHash
+      ) {
+        return false
+      }
       return file.size <= 0 || info.size === file.size
     } catch {
       return false
@@ -550,29 +827,48 @@ export class SyncService {
   private async downloadFile(
     api: MoodleApi,
     vaultPath: string,
-    file: SyncFilePlan
-  ): Promise<void> {
+    file: SyncFilePlan,
+    existing: ManifestEntry | undefined
+  ): Promise<{ hash: string; backedUp: boolean }> {
     if (!file.content.fileurl) {
       throw new Error('URL del file assente.')
     }
     const target = absoluteFromRelative(vaultPath, file.relativePath)
     await mkdir(dirname(target), { recursive: true })
-    const temporaryPath = `${target}.part`
+    const temporaryPath = `${target}.unipddispense-download.part`
     try {
-      const response = await api.fetchFile(file.content.fileurl)
+      const controller = new AbortController()
+      this.activeAbortController = controller
+      const response = await api.fetchFile(file.content.fileurl, controller.signal)
       const body = response.body as unknown as
         | import('node:stream/web').ReadableStream<Uint8Array>
         | null
       if (!body) {
         throw new Error('Risposta senza contenuto.')
       }
-      await pipeline(Readable.fromWeb(body), createWriteStream(temporaryPath))
+      const hash = createHash('sha256')
+      const hashStream = new Transform({
+        transform(chunk: Buffer, _encoding, callback) {
+          hash.update(chunk)
+          callback(null, chunk)
+        }
+      })
+      await pipeline(Readable.fromWeb(body), hashStream, createWriteStream(temporaryPath))
+      let backedUp =
+        existing && existing.relativePath === file.relativePath
+          ? await this.backupIfLocalFileChanged(vaultPath, existing)
+          : false
       try {
         await rename(temporaryPath, target)
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code
         if (code !== 'EEXIST' && code !== 'EPERM') {
           throw error
+        }
+        // The existing copy is retained in the backup folder before this replacement.
+        if (!backedUp && existing) {
+          await this.backupLocalFile(vaultPath, existing.relativePath)
+          backedUp = true
         }
         await rm(target, { force: true })
         await rename(temporaryPath, target)
@@ -581,10 +877,90 @@ export class SyncService {
         const modified = new Date(file.moodleModifiedAt)
         await utimes(target, new Date(), modified).catch(() => undefined)
       }
+      return { hash: hash.digest('hex'), backedUp }
     } catch (error) {
       await rm(temporaryPath, { force: true }).catch(() => undefined)
       throw error
+    } finally {
+      this.activeAbortController = null
     }
+  }
+
+  private async backupIfLocalFileChanged(
+    vaultPath: string,
+    existing: ManifestEntry
+  ): Promise<boolean> {
+    const target = absoluteFromRelative(vaultPath, existing.relativePath)
+    try {
+      const info = await stat(target)
+      if (!info.isFile()) return false
+      if (existing.downloadHash && (await hashFile(target)) === existing.downloadHash) {
+        return false
+      }
+      await this.backupLocalFile(vaultPath, existing.relativePath)
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+      throw error
+    }
+  }
+
+  private async backupLocalFile(vaultPath: string, relativePath: string): Promise<void> {
+    const source = absoluteFromRelative(vaultPath, relativePath)
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const backupRoot = absoluteFromRelative(vaultPath, `.moodlescraper/backups/${timestamp}`)
+    const destination = absoluteFromRelative(backupRoot, relativePath)
+    await mkdir(dirname(destination), { recursive: true })
+    let target = destination
+    let suffix = 1
+    while (true) {
+      try {
+        await stat(target)
+        const extensionIndex = destination.lastIndexOf('.')
+        target = extensionIndex > destination.lastIndexOf(sep)
+          ? `${destination.slice(0, extensionIndex)} (${suffix++})${destination.slice(extensionIndex)}`
+          : `${destination} (${suffix++})`
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        break
+      }
+    }
+    await copyFile(source, target)
+    logger.info(`Copia di sicurezza creata: ${relative(vaultPath, target).split(sep).join('/')}`)
+  }
+
+  private async writeManagedFiles(
+    vaultPath: string,
+    manifest: SyncManifest,
+    files: Array<{ path: string; key: string }>,
+    write: () => Promise<void>
+  ): Promise<number> {
+    let backedUp = 0
+    for (const file of files) {
+      const absolutePath = absoluteFromRelative(vaultPath, file.path)
+      try {
+        const info = await stat(absolutePath)
+        if (!info.isFile()) continue
+        const expectedHash = manifest.generatedHashes?.[file.key]
+        if (!expectedHash || (await hashFile(absolutePath)) !== expectedHash) {
+          await this.backupLocalFile(vaultPath, file.path)
+          backedUp += 1
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+    }
+    await write()
+    manifest.generatedHashes ??= {}
+    for (const file of files) {
+      const absolutePath = absoluteFromRelative(vaultPath, file.path)
+      try {
+        manifest.generatedHashes[file.key] = await hashFile(absolutePath)
+      } catch {
+        // A missing generated file can be rebuilt on the next synchronization.
+      }
+    }
+    return backedUp
   }
 
   private buildEntry(
@@ -633,6 +1009,9 @@ export class SyncService {
       noteType: file.note?.type ?? existing?.noteType ?? null,
       noteBody: file.noteBody ?? existing?.noteBody ?? null,
       contentHash: file.contentHash ?? existing?.contentHash ?? null,
+      downloadHash: file.kind === 'file' ? existing?.downloadHash ?? null : null,
+      pendingNoteUpdate: existing?.pendingNoteUpdate,
+      pendingSidecarUpdate: existing?.pendingSidecarUpdate,
       firstSeenAt: existing?.firstSeenAt ?? now,
       lastSeenAt: now,
       downloadedAt: wasDownloaded ? now : downloadedAt,
@@ -682,6 +1061,70 @@ function noteContentHash(file: SyncFilePlan): string | null {
     .digest('hex')
 }
 
+async function hashFile(path: string): Promise<string> {
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(path)) {
+    hash.update(chunk as Buffer)
+  }
+  return hash.digest('hex')
+}
+
+async function createFreshVaultPath(rootPath: string, currentVaultPath: string): Promise<string> {
+  if (!isAbsolute(rootPath)) {
+    throw new Error('Scegli una cartella di destinazione valida.')
+  }
+  await mkdir(rootPath, { recursive: true })
+  const destinationRoot = await realpath(rootPath)
+  const currentRoot = await realpath(currentVaultPath).catch(() => resolve(currentVaultPath))
+  const relation = relative(currentRoot, destinationRoot)
+  const isInsideCurrentVault =
+    relation === '' ||
+    (relation !== '..' && !relation.startsWith(`..${sep}`) && !isAbsolute(relation))
+  if (isInsideCurrentVault) {
+    throw new Error('Scegli una cartella fuori dal vault attuale: la copia precedente verrà conservata.')
+  }
+
+  const date = new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '-')
+  const baseName = `Unipd Dispense - nuova copia ${date}`
+  for (let suffix = 0; suffix < 100; suffix += 1) {
+    const folderName = suffix === 0 ? baseName : `${baseName} (${suffix + 1})`
+    const candidate = join(destinationRoot, folderName)
+    try {
+      await mkdir(candidate)
+      return candidate
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    }
+  }
+  throw new Error('Non riesco a creare una cartella libera per la nuova copia.')
+}
+
+async function cleanupInterruptedDownloads(vaultPath: string): Promise<void> {
+  const visit = async (directory: string): Promise<void> => {
+    let children
+    try {
+      children = await readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw error
+    }
+    for (const child of children) {
+      if (child.isSymbolicLink()) continue
+      const path = join(directory, child.name)
+      if (child.isDirectory()) {
+        await visit(path)
+      } else if (
+        child.isFile() &&
+        (child.name.endsWith('.unipddispense-download.part') ||
+          child.name.endsWith('.unipddispense-write.tmp'))
+      ) {
+        await rm(path, { force: true })
+      }
+    }
+  }
+  await visit(vaultPath)
+}
+
 function existingPathKeysForCourse(
   manifest: SyncManifest,
   courseId: number,
@@ -728,8 +1171,7 @@ async function collectOccupiedPaths(
 function markRemovedFiles(
   manifest: SyncManifest,
   plan: CourseSyncPlan,
-  now: string,
-  changedKeys: Set<string>
+  now: string
 ): number {
   const presentKeys = new Set(plan.files.map((file) => file.key))
   let removed = 0
@@ -745,10 +1187,32 @@ function markRemovedFiles(
     entry.previousTags = [...entry.tags]
     entry.tags = [...new Set([...entry.tags, 'rimosso-da-moodle'])]
     entry.events.push({ type: 'removed', at: now })
-    changedKeys.add(entry.key)
+    if (entry.kind === 'note') {
+      entry.pendingNoteUpdate = true
+    } else {
+      entry.pendingSidecarUpdate = true
+    }
     removed += 1
   }
   return removed
+}
+
+function courseFolderPath(vaultPath: string, courseFolder: string): string {
+  if (
+    !courseFolder ||
+    courseFolder === '.' ||
+    courseFolder === '..' ||
+    courseFolder.includes('/') ||
+    courseFolder.includes('\\') ||
+    courseFolder.startsWith('.')
+  ) {
+    throw new Error('La cartella del corso non è valida.')
+  }
+  const folderPath = absoluteFromRelative(vaultPath, courseFolder)
+  if (relative(resolve(vaultPath), folderPath) !== courseFolder) {
+    throw new Error('La cartella del corso non è valida.')
+  }
+  return folderPath
 }
 
 function isAuthenticationError(error: unknown): boolean {

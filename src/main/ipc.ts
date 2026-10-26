@@ -25,6 +25,7 @@ interface IpcDependencies {
   materials: MaterialsService
   sync: SyncService
   chooseVault: () => Promise<string | null>
+  chooseFreshSyncLocation: () => Promise<string | null>
   openVault: () => Promise<void>
   quit: () => void
 }
@@ -39,6 +40,7 @@ export function registerIpc(dependencies: IpcDependencies): void {
     materials,
     sync,
     chooseVault,
+    chooseFreshSyncLocation,
     openVault,
     quit
   } = dependencies
@@ -99,6 +101,11 @@ export function registerIpc(dependencies: IpcDependencies): void {
   handle(IPC.syncStart, (_event, options) =>
     sync.start(parseSyncOptions(options))
   )
+  handle(IPC.syncListUnselectedCourseFolders, (_event, courseIds) =>
+    sync.listUnselectedCourseFolders(parseCourseIds(courseIds))
+  )
+  handle(IPC.syncStop, () => sync.stop())
+  handle(IPC.syncChooseFreshLocation, () => chooseFreshSyncLocation())
   handle(IPC.syncStatus, () => sync.getProgress())
 
 }
@@ -119,9 +126,10 @@ function parseSyncOptions(value: unknown): SyncOptions {
   const record = value as Record<string, unknown>
   const options: SyncOptions = {}
   if (Array.isArray(record.courseIds)) {
-    options.courseIds = record.courseIds.filter(
-      (id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0
-    )
+    options.courseIds = parseCourseIds(record.courseIds)
+  }
+  if (Array.isArray(record.deleteCourseIds)) {
+    options.deleteCourseIds = parseCourseIds(record.deleteCourseIds)
   }
   if (
     record.reason === 'manual' ||
@@ -130,5 +138,15 @@ function parseSyncOptions(value: unknown): SyncOptions {
   ) {
     options.reason = record.reason
   }
+  if (typeof record.freshCopyRoot === 'string') {
+    options.freshCopyRoot = record.freshCopyRoot
+  }
   return options
+}
+
+function parseCourseIds(value: unknown): number[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter(
+    (id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0
+  ))]
 }

@@ -10,7 +10,7 @@ export function markQuitting(): void {
   quitting = true
 }
 
-export function createMainWindow(): BrowserWindow {
+export function createMainWindow(options: { startHidden?: boolean } = {}): BrowserWindow {
   const window = new BrowserWindow({
     width: 1220,
     height: 820,
@@ -39,7 +39,7 @@ export function createMainWindow(): BrowserWindow {
   }
 
   window.on('ready-to-show', () => {
-    if (!process.argv.includes('--hidden')) {
+    if (!options.startHidden && !process.argv.includes('--hidden')) {
       window.show()
     }
   })

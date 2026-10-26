@@ -11,18 +11,21 @@ import {
   ExternalIcon,
   FolderIcon,
   LogoutIcon,
+  PaletteIcon,
   PowerIcon,
   ServerIcon,
   ShieldIcon,
   UserIcon
 } from './Icons'
 import { Switch } from './Switch'
+import { AppearancePicker } from './AppearancePicker'
 
 export function SettingsView(): JSX.Element {
   const info = useAppStore((state) => state.info)
   const settings = useAppStore((state) => state.settings)
   const auth = useAppStore((state) => state.auth)
   const saving = useAppStore((state) => state.settingsSaving)
+  const sync = useAppStore((state) => state.sync)
   const saveSettings = useAppStore((state) => state.saveSettings)
   const chooseVault = useAppStore((state) => state.chooseVault)
   const openVault = useAppStore((state) => state.openVault)
@@ -59,13 +62,40 @@ export function SettingsView(): JSX.Element {
           <span className="status-pill__dot" />
           Connesso
         </span>
-        <button type="button" className="button button--secondary" onClick={() => void logout()}>
+        <button
+          type="button"
+          className="button button--secondary"
+          onClick={() => void logout()}
+          disabled={sync.running}
+        >
           <LogoutIcon />
           Disconnetti
         </button>
       </section>
 
       <div className="settings-grid">
+        <section className="card settings-card">
+          <div className="card__header">
+            <div>
+              <span className="eyebrow">Personalizzazione</span>
+              <h2>Aspetto</h2>
+            </div>
+            <span className="icon-badge">
+              <PaletteIcon />
+            </span>
+          </div>
+          <p className="muted">
+            Scegli il tema dell’app e un colore pastello per gli elementi principali.
+          </p>
+          <AppearancePicker
+            themeMode={settings.themeMode}
+            accentColor={settings.accentColor}
+            disabled={saving}
+            onThemeChange={(themeMode) => void saveSettings({ themeMode })}
+            onAccentChange={(accentColor) => void saveSettings({ accentColor })}
+          />
+        </section>
+
         <section className="card settings-card">
           <div className="card__header">
             <div>
@@ -88,7 +118,7 @@ export function SettingsView(): JSX.Element {
               type="button"
               className="button button--secondary"
               onClick={() => void chooseVault()}
-              disabled={saving}
+              disabled={saving || sync.running}
             >
               Scegli cartella
             </button>
@@ -214,7 +244,7 @@ export function SettingsView(): JSX.Element {
           <div className="setting-row">
             <div>
               <strong>Avvia con il sistema</strong>
-              <span>Apri l’app all’accesso, senza mostrare la finestra.</span>
+              <span>Apri l’app all’accesso nell’area di notifica, senza mostrare la finestra.</span>
             </div>
             <Switch
               checked={settings.launchAtLogin}

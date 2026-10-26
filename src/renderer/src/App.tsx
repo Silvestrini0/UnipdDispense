@@ -1,6 +1,7 @@
 import { useEffect, type JSX } from 'react'
 import { CoursesView } from './components/CoursesView'
 import { DashboardView } from './components/DashboardView'
+import { AppearanceModal } from './components/AppearanceModal'
 import { LoginView } from './components/LoginView'
 import { MaterialsView } from './components/MaterialsView'
 import { Logo } from './components/Logo'
@@ -13,6 +14,7 @@ import { useAppStore } from './store'
 export default function App(): JSX.Element {
   const initialized = useAppStore((state) => state.initialized)
   const auth = useAppStore((state) => state.auth)
+  const settings = useAppStore((state) => state.settings)
   const view = useAppStore((state) => state.view)
   const notice = useAppStore((state) => state.notice)
   const dismissNotice = useAppStore((state) => state.dismissNotice)
@@ -21,6 +23,13 @@ export default function App(): JSX.Element {
   useEffect(() => {
     void initialize()
   }, [initialize])
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.dataset.theme = settings?.themeMode ?? 'light'
+    root.dataset.accent = settings?.accentColor ?? 'blue'
+    root.style.colorScheme = settings?.themeMode ?? 'light'
+  }, [settings?.themeMode, settings?.accentColor])
 
   useEffect(() => {
     if (!notice) {
@@ -63,6 +72,9 @@ export default function App(): JSX.Element {
           {view === 'settings' && <SettingsView />}
         </div>
       </main>
+      {settings && !settings.personalizationCompleted && (
+        <AppearanceModal settings={settings} />
+      )}
       <Notice />
     </div>
   )

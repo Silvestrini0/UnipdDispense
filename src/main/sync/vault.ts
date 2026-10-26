@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { ManifestEntry } from './manifest'
 import { absoluteFromRelative, shortDate } from './paths'
@@ -308,5 +308,12 @@ async function writeIfChanged(target: string, content: string): Promise<void> {
     return
   }
   await mkdir(dirname(target), { recursive: true })
-  await writeFile(target, content, 'utf8')
+  const temporaryPath = `${target}.unipddispense-write.tmp`
+  try {
+    await writeFile(temporaryPath, content, 'utf8')
+    await rename(temporaryPath, target)
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => undefined)
+    throw error
+  }
 }

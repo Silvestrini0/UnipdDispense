@@ -19,6 +19,7 @@ import { MaterialsService } from './materials-service'
 import { registerIpc } from './ipc'
 import { logger } from './logger'
 import { createAppTray, type AppTray } from './tray'
+import { applyLaunchAtLogin } from './startup'
 import { SyncScheduler } from './scheduler'
 import { SecretsStore } from './secrets-store'
 import { SettingsStore } from './settings-store'
@@ -78,6 +79,9 @@ async function bootstrap(): Promise<void> {
   const settings = new SettingsStore(join(userDataPath, 'settings.json'), {
     vaultPath: join(app.getPath('documents'), 'UniPD'),
     moodleBaseUrl: MOODLE_BASE_URL,
+    themeMode: 'light',
+    accentColor: 'blue',
+    personalizationCompleted: false,
     syncIntervalMinutes: 30,
     autoSync: true,
     launchAtLogin: false,
@@ -106,6 +110,9 @@ async function bootstrap(): Promise<void> {
   )
   const courses = new CourseService(auth)
   const sync = new SyncService(auth, settings)
+  await sync.restoreInterruptedState().catch((error) => {
+    logger.warn('Ripristino dello stato di sincronizzazione non riuscito:', error)
+  })
   const materials = new MaterialsService(settings, () => mainWindow)
   const info = (): AppInfo => ({
     name: APP_NAME,
@@ -115,7 +122,8 @@ async function bootstrap(): Promise<void> {
     userDataPath
   })
 
-  mainWindow = createMainWindow()
+  const launchedAtLogin = wasLaunchedAtLogin(settings.get().launchAtLogin)
+  mainWindow = createMainWindow({ startHidden: launchedAtLogin })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -129,6 +137,7 @@ async function bootstrap(): Promise<void> {
     materials,
     sync,
     chooseVault: () => chooseVault(settings.get().vaultPath),
+    chooseFreshSyncLocation: () => chooseFreshSyncLocation(settings.get().vaultPath),
     openVault: async () => {
       const vaultPath = settings.get().vaultPath
       await mkdir(vaultPath, { recursive: true })
@@ -167,13 +176,13 @@ async function bootstrap(): Promise<void> {
     broadcast(IPC.settingsChanged, next)
     appTray?.refresh()
     scheduler?.refresh()
-    applyLaunchAtLogin(next)
+    void applyLaunchAtLogin(next.launchAtLogin)
   })
   sync.onProgress((progress: SyncProgress) => {
     broadcast(IPC.syncProgress, progress)
   })
 
-  applyLaunchAtLogin(settings.get())
+  void applyLaunchAtLogin(settings.get().launchAtLogin)
 
   const syncScheduler = new SyncScheduler(auth, sync, settings)
   scheduler = syncScheduler
@@ -202,6 +211,21 @@ async function chooseVault(defaultPath: string): Promise<string | null> {
   const options: Electron.OpenDialogOptions = {
     title: 'Scegli il vault Obsidian',
     defaultPath,
+    properties: ['openDirectory', 'createDirectory']
+  }
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || !result.filePaths[0]) {
+    return null
+  }
+  return result.filePaths[0]
+}
+
+async function chooseFreshSyncLocation(defaultPath: string): Promise<string | null> {
+  const options: Electron.OpenDialogOptions = {
+    title: 'Scegli dove creare la nuova copia dei materiali',
+    defaultPath: join(defaultPath, '..'),
     properties: ['openDirectory', 'createDirectory']
   }
   const result = mainWindow
@@ -259,13 +283,17 @@ function isProcessRunning(name: string): boolean {
   return false
 }
 
-function applyLaunchAtLogin(settings: AppSettings): void {
+function wasLaunchedAtLogin(launchAtLogin: boolean): boolean {
+  if (process.argv.includes('--hidden')) {
+    return true
+  }
+  if (process.platform !== 'darwin' || !launchAtLogin) {
+    return false
+  }
   try {
-    app.setLoginItemSettings({
-      openAtLogin: settings.launchAtLogin,
-      args: ['--hidden']
-    })
+    return app.getLoginItemSettings().wasOpenedAtLogin ?? false
   } catch (error) {
-    logger.warn('Impossibile configurare l’avvio automatico:', String(error))
+    logger.warn('Impossibile verificare l’avvio automatico:', String(error))
+    return false
   }
 }

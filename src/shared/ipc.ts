@@ -3,6 +3,7 @@ import type {
   AppSettings,
   AppSnapshot,
   AuthStatus,
+  CourseFolderToDelete,
   CourseSummary,
   MaterialFile,
   RecentAddedFile,
@@ -27,6 +28,9 @@ export const IPC = {
   authChanged: 'auth:changed',
   coursesList: 'courses:list',
   syncStart: 'sync:start',
+  syncListUnselectedCourseFolders: 'sync:list-unselected-course-folders',
+  syncStop: 'sync:stop',
+  syncChooseFreshLocation: 'sync:choose-fresh-location',
   syncStatus: 'sync:status',
   syncProgress: 'sync:progress',
   materialsList: 'materials:list',
@@ -65,6 +69,9 @@ export interface DesktopApi {
   }
   sync: {
     start: (options?: SyncOptions) => Promise<SyncResult>
+    listUnselectedCourseFolders: (courseIds: number[]) => Promise<CourseFolderToDelete[]>
+    stop: () => Promise<boolean>
+    chooseFreshLocation: () => Promise<string | null>
     getStatus: () => Promise<SyncProgress>
     onProgress: (callback: (progress: SyncProgress) => void) => () => void
   }

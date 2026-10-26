@@ -1,12 +1,15 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
-import { MOODLE_BASE_URL } from '../shared/types'
+import { ACCENT_COLORS, MOODLE_BASE_URL, THEME_MODES } from '../shared/types'
 import type { AppSettings, SettingsPatch } from '../shared/types'
 
 const settingsSchema = z.object({
   vaultPath: z.string().min(1),
   moodleBaseUrl: z.string().url().catch(MOODLE_BASE_URL),
+  themeMode: z.enum(THEME_MODES).default('light'),
+  accentColor: z.enum(ACCENT_COLORS).default('blue'),
+  personalizationCompleted: z.boolean().default(true),
   syncIntervalMinutes: z.number().int().min(5).max(1440),
   autoSync: z.boolean(),
   launchAtLogin: z.boolean(),

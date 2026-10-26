@@ -6,6 +6,12 @@ import { AlertIcon, CheckIcon, ClockIcon, SyncIcon } from './Icons'
 export function SyncCard(): JSX.Element {
   const sync = useAppStore((state) => state.sync)
   const settings = useAppStore((state) => state.settings)
+  const auth = useAppStore((state) => state.auth)
+  const stopSync = useAppStore((state) => state.stopSync)
+  const startSync = useAppStore((state) => state.startSync)
+  const startFreshSync = useAppStore((state) => state.startFreshSync)
+  const hasSelection =
+    Boolean(settings?.syncAllCourses) || (settings?.selectedCourseIds.length ?? 0) > 0
   const percent =
     sync.total > 0 ? Math.min(100, Math.round((sync.processed / sync.total) * 100)) : 0
   const errored = sync.phase === 'error' || sync.errors > 0
@@ -20,7 +26,13 @@ export function SyncCard(): JSX.Element {
         </div>
         <span className={`status-pill ${sync.running ? 'status-pill--busy' : ''}`}>
           <span className="status-pill__dot" />
-          {sync.running ? 'In corso' : complete ? 'Completata' : 'In attesa'}
+          {sync.running
+            ? 'In corso'
+            : sync.phase === 'paused'
+              ? 'Fermata'
+              : complete
+                ? 'Completata'
+                : 'In attesa'}
         </span>
       </div>
 
@@ -64,6 +76,42 @@ export function SyncCard(): JSX.Element {
         </div>
       )}
 
+      <div className="sync-card__actions">
+        {sync.running && sync.phase !== 'finalizing' && (
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void stopSync()}
+          >
+            Ferma sincronizzazione
+          </button>
+        )}
+        {sync.phase === 'paused' && (
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => void startSync({ reason: 'manual' })}
+          >
+            Riprendi da dove si è fermata
+          </button>
+        )}
+        <button
+          type="button"
+          className="button button--ghost"
+          onClick={() => void startFreshSync()}
+          disabled={sync.running || auth?.state !== 'authenticated' || !hasSelection}
+          title={
+            auth?.state !== 'authenticated'
+              ? 'Accedi a Moodle per scaricare i materiali'
+              : !hasSelection
+                ? 'Seleziona almeno un corso'
+                : undefined
+          }
+        >
+          Riscarica i corsi selezionati in una nuova cartella
+        </button>
+      </div>
+
       <div className="stat-grid stat-grid--compact">
         <div className="stat">
           <strong>{sync.downloaded}</strong>
@@ -82,6 +130,12 @@ export function SyncCard(): JSX.Element {
           <span>Errori</span>
         </div>
       </div>
+
+      <p className="sync-card__safety">
+        {sync.backedUp} copie di sicurezza · {sync.localChanges} modifiche locali mantenute.
+        {' '}Le versioni salvate sono in <code>.moodlescraper/backups</code> nel vault.
+        {' '}Una copia completa crea una nuova cartella e lascia intatto il vault attuale.
+      </p>
 
       <div className="sync-card__footer">
         <span>

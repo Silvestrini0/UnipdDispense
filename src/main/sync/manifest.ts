@@ -46,11 +46,16 @@ export interface ManifestEntry {
   noteType: string | null
   noteBody: string | null
   contentHash: string | null
+  downloadHash?: string | null
+  pendingNoteUpdate?: boolean
+  pendingSidecarUpdate?: boolean
 }
 
 export interface SyncManifest {
   version: 1
   entries: Record<string, ManifestEntry>
+  generatedHashes?: Record<string, string>
+  interrupted?: boolean
 }
 
 function emptyManifest(): SyncManifest {
@@ -83,10 +88,26 @@ export class ManifestStore {
           category: entry.category === 'info' ? 'info' : 'material',
           noteType: typeof entry.noteType === 'string' ? entry.noteType : null,
           noteBody: typeof entry.noteBody === 'string' ? entry.noteBody : null,
-          contentHash: typeof entry.contentHash === 'string' ? entry.contentHash : null
+          contentHash: typeof entry.contentHash === 'string' ? entry.contentHash : null,
+          ...(typeof entry.downloadHash === 'string'
+            ? { downloadHash: entry.downloadHash }
+            : {})
         } as ManifestEntry
       }
-      return { version: 1, entries }
+      const generatedHashes =
+        parsed.generatedHashes && typeof parsed.generatedHashes === 'object'
+          ? Object.fromEntries(
+              Object.entries(parsed.generatedHashes).filter(
+                (item): item is [string, string] => typeof item[1] === 'string'
+              )
+            )
+          : undefined
+      return {
+        version: 1,
+        entries,
+        ...(generatedHashes ? { generatedHashes } : {}),
+        ...(parsed.interrupted === true ? { interrupted: true } : {})
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         logger.warn('Manifest non leggibile, ne creo uno nuovo:', String(error))

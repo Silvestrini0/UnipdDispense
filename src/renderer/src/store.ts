@@ -47,6 +47,8 @@ interface AppStore {
   saveSettings: (patch: SettingsPatch) => Promise<void>
   chooseVault: () => Promise<void>
   startSync: (options?: SyncOptions) => Promise<void>
+  stopSync: () => Promise<void>
+  startFreshSync: () => Promise<void>
   openVault: () => Promise<void>
   quit: () => Promise<void>
   dismissNotice: () => void
@@ -64,6 +66,8 @@ const emptySync: SyncProgress = {
   downloaded: 0,
   skipped: 0,
   removed: 0,
+  backedUp: 0,
+  localChanges: 0,
   errors: 0,
   startedAt: null,
   finishedAt: null
@@ -238,16 +242,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const result = await window.api.sync.start(options ?? { reason: 'manual' })
       const status = await window.api.sync.getStatus()
       const noCourses = result.courses === 0
+      const activeSettings = options?.freshCopyRoot
+        ? await window.api.settings.get().catch(() => null)
+        : null
+      const resultMessage = result.paused
+        ? `Sincronizzazione fermata in sicurezza: ${result.downloaded} file completati. Puoi riprenderla quando vuoi.`
+        : noCourses
+          ? 'Nessun corso trovato su questa piattaforma. Se i tuoi corsi sono altrove, cambia piattaforma nella schermata di accesso (es. STEM).'
+          : `Sync completata: ${result.downloaded} scaricati, ${result.skipped} invariati, ${result.removed} rimossi${result.deletedCourses ? `, ${result.deletedCourses} cartelle di corsi eliminate` : ''}${result.backedUp > 0 ? `, ${result.backedUp} copie di sicurezza` : ''}${result.localChanges > 0 ? `, ${result.localChanges} modifiche locali mantenute` : ''}${result.errors.length > 0 ? `, ${result.errors.length} errori` : ''}.`
+      const noticeMessage = options?.freshCopyRoot
+        ? `Nuova cartella: ${activeSettings?.vaultPath ?? 'creata'}. Il vault precedente è rimasto intatto. ${resultMessage}`
+        : resultMessage
       set({
         sync: status,
+        ...(activeSettings ? { settings: activeSettings } : {}),
         notice: makeNotice(
-          noCourses ? 'info' : result.errors.length > 0 ? 'info' : 'success',
-          noCourses
-            ? 'Nessun corso trovato su questa piattaforma. Se i tuoi corsi sono altrove, cambia piattaforma nella schermata di accesso (es. STEM).'
-            : `Sync completata: ${result.downloaded} scaricati, ${result.skipped} invariati, ${result.removed} rimossi${result.errors.length > 0 ? `, ${result.errors.length} errori` : ''}.`
+          result.paused
+            ? 'info'
+            : noCourses
+              ? 'info'
+              : result.errors.length > 0 || result.localChanges > 0
+                ? 'info'
+                : 'success',
+          noticeMessage
         )
       })
-      if (result.courses > 0) await get().refreshMaterials()
+      if (result.courses > 0 && !result.paused) await get().refreshMaterials()
     } catch (error) {
       const status = await window.api.sync.getStatus().catch(() => null)
       const auth = await window.api.auth.getStatus().catch(() => null)
@@ -256,6 +276,28 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ...(auth ? { auth } : {}),
         notice: makeNotice('error', messageFrom(error))
       })
+    }
+  },
+
+  stopSync: async () => {
+    try {
+      await window.api.sync.stop()
+    } catch (error) {
+      set({ notice: makeNotice('error', messageFrom(error)) })
+    }
+  },
+
+  startFreshSync: async () => {
+    try {
+      const freshCopyRoot = await window.api.sync.chooseFreshLocation()
+      if (!freshCopyRoot) return
+      if (get().sync.running) {
+        set({ notice: makeNotice('info', 'La sincronizzazione è già in corso. Fermala prima di avviare una nuova copia.') })
+        return
+      }
+      await get().startSync({ reason: 'manual', freshCopyRoot })
+    } catch (error) {
+      set({ notice: makeNotice('error', messageFrom(error)) })
     }
   },
 
@@ -304,7 +346,9 @@ function subscribeToEvents(
   })
   window.api.sync.onProgress((sync) => {
     set({ sync })
-    if (sync.phase === 'completed') void get().refreshMaterials()
+    if (sync.phase === 'completed' || sync.phase === 'paused') {
+      void get().refreshMaterials()
+    }
   })
 }
 

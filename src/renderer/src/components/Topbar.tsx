@@ -57,7 +57,13 @@ export function Topbar(): JSX.Element {
           title={!hasSelection ? 'Seleziona almeno un corso' : undefined}
         >
           <SyncIcon className={sync.running ? 'spin' : undefined} />
-          <span>{sync.running ? 'Sincronizzazione…' : 'Sincronizza ora'}</span>
+          <span>
+            {sync.running
+              ? 'Sincronizzazione…'
+              : sync.phase === 'paused'
+                ? 'Riprendi sincronizzazione'
+                : 'Sincronizza ora'}
+          </span>
         </button>
       </div>
     </header>

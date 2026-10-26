@@ -55,6 +55,8 @@ export function phaseLabel(phase: SyncPhase): string {
       return 'Download dei materiali'
     case 'finalizing':
       return 'Schede e indici'
+    case 'paused':
+      return 'Fermata'
     case 'completed':
       return 'Completata'
     case 'error':
