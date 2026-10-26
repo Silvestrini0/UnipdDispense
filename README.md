@@ -6,7 +6,7 @@ UnipdDispense è un'applicazione desktop che sincronizza i materiali dei corsi M
 
 ## Installazione
 
-I pacchetti vengono generati per Linux, Windows e macOS quando viene pubblicata una release. Le nuove versioni vengono segnalate nell’app e possono essere scaricate dal pulsante di aggiornamento. Gli aggiornamenti automatici si possono attivare o disattivare nelle impostazioni. L’installazione tramite updater è disponibile per Windows (installer), Linux (AppImage) e macOS; i pacchetti Linux **.deb** e **.rpm** vanno aggiornati tramite il rispettivo gestore pacchetti.
+I pacchetti vengono generati per Linux, Windows e macOS quando viene pubblicata una release. L’app controlla le nuove versioni e consente di scaricarle e installarle dal pulsante in alto a destra; gli aggiornamenti automatici si possono attivare o disattivare nelle impostazioni. L’updater è disponibile per Windows (installer), Linux (AppImage, **.deb** e **.rpm**) e macOS. Per i pacchetti Linux installati, il sistema può chiedere conferma o la password amministratore durante l’installazione.
 
 ### Linux
 
@@ -14,6 +14,8 @@ I pacchetti vengono generati per Linux, Windows e macOS quando viene pubblicata 
 - **Debian e Ubuntu:** scarica il file **.deb** e installalo con sudo apt install ./UnipdDispense-*.deb dalla cartella in cui si trova.
 - **Fedora e distribuzioni compatibili:** scarica il file **.rpm** e installalo con sudo dnf install ./UnipdDispense-*.rpm.
 - **Altre distribuzioni:** usa il pacchetto **AppImage**, che non richiede installazione ed è aggiornabile dall’app.
+
+L’aggiornamento interno per i pacchetti **.deb** e **.rpm** è disponibile dalla versione 0.1.10. Se usi uno di questi pacchetti con una versione precedente, aggiorna manualmente alla 0.1.10 una volta; le versioni successive potranno poi essere installate dall’app.
 
 Su Ubuntu, se l'icona dell'app nell'area di notifica non compare, installa il supporto AppIndicator con `sudo apt install libayatana-appindicator3-1`.
 

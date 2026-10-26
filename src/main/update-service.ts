@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { IPC } from '../shared/ipc'
@@ -237,8 +239,19 @@ export class UpdateService {
     if (process.platform === 'darwin') {
       return process.arch === 'x64' || process.arch === 'arm64'
     }
-    // electron-updater only supports Linux AppImage installations.
-    return process.platform === 'linux' && process.arch === 'x64' && Boolean(process.env.APPIMAGE)
+    return process.platform === 'linux' && process.arch === 'x64' && isSupportedLinuxPackage()
+  }
+}
+
+function isSupportedLinuxPackage(): boolean {
+  if (process.env.APPIMAGE) {
+    return true
+  }
+  try {
+    const packageType = readFileSync(join(process.resourcesPath, 'package-type'), 'utf8').trim()
+    return packageType === 'deb' || packageType === 'rpm'
+  } catch {
+    return false
   }
 }
 

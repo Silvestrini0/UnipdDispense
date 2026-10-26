@@ -45,7 +45,7 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
             : update.state === 'downloaded'
               ? platform === 'darwin'
                 ? 'Puoi aprire Privacy e Sicurezza prima di installare. Dopo il riavvio, se macOS blocca l’app, premi Apri comunque e conferma Apri.'
-                : 'Riavvia l’app per completare l’installazione.'
+                : 'Usa il pulsante rosso in alto per riavviare e installare l’aggiornamento.'
               : update.state === 'downloading'
                 ? `${Math.round(update.percent)}% completato. Puoi continuare a usare l’app.`
                 : 'È pronta per essere scaricata e installata.'}
@@ -63,7 +63,7 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
           </div>
         )}
       </div>
-      {update.state === 'available' && (
+      {floating && update.state === 'available' && (
         <button
           type="button"
           className="button button--update"
@@ -73,7 +73,7 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
           Aggiorna alla versione {version}
         </button>
       )}
-      {update.state === 'downloaded' && (
+      {update.state === 'downloaded' && (floating || platform === 'darwin') && (
         <div className="update-banner__actions">
           {platform === 'darwin' && (
             <button
@@ -84,17 +84,19 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
               Apri Privacy e Sicurezza
             </button>
           )}
-          <button
-            type="button"
-            className="button button--update"
-            onClick={() => void installUpdate()}
-          >
-            <DownloadIcon />
-            Riavvia e installa
-          </button>
+          {floating && (
+            <button
+              type="button"
+              className="button button--update"
+              onClick={() => void installUpdate()}
+            >
+              <DownloadIcon />
+              Riavvia e installa
+            </button>
+          )}
         </div>
       )}
-      {error && (
+      {floating && error && (
         <button
           type="button"
           className="button button--update"
