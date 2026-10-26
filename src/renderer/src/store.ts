@@ -178,12 +178,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ loginBusy: true })
     try {
       const status = await window.api.auth.login()
+      let appearanceResetError: string | null = null
+      if (status.state === 'authenticated') {
+        const currentSettings = get().settings
+        if (currentSettings) {
+          set({
+            settings: { ...currentSettings, personalizationCompleted: false },
+            settingsSaving: true
+          })
+          try {
+            const settings = await window.api.settings.update({ personalizationCompleted: false })
+            set({ settings, settingsSaving: false })
+          } catch (error) {
+            appearanceResetError = messageFrom(error)
+            set({ settingsSaving: false })
+          }
+        }
+      }
       set({
         auth: status,
         loginBusy: false,
         notice:
           status.state === 'authenticated'
-            ? makeNotice('success', 'Accesso a Moodle completato.')
+            ? appearanceResetError
+              ? makeNotice(
+                  'error',
+                  `Accesso completato, ma non è stato possibile aggiornare le preferenze: ${appearanceResetError}`
+                )
+              : makeNotice('success', 'Accesso a Moodle completato.')
             : status.error
               ? makeNotice('error', status.error)
               : null

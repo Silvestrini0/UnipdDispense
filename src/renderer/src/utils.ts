@@ -80,8 +80,3 @@ export function secureStorageLabel(
       return 'Portachiavi non disponibile'
   }
 }
-
-export function courseColor(id: number): string {
-  const palette = ['#2563eb', '#0f766e', '#9333ea', '#c2410c', '#0369a1', '#be123c']
-  return palette[id % palette.length] ?? '#2563eb'
-}

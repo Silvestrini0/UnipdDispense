@@ -1,7 +1,7 @@
-import { useEffect, useState, type CSSProperties, type JSX } from 'react'
+import { useEffect, useState, type JSX } from 'react'
 import type { RecentAddedFile } from '../../../shared/types'
 import { useAppStore } from '../store'
-import { courseColor, formatDateTime } from '../utils'
+import { formatDateTime } from '../utils'
 import { AlertIcon, ExternalIcon, FileIcon } from './Icons'
 
 export function RecentFilesCard(): JSX.Element {
@@ -59,7 +59,6 @@ export function RecentFilesCard(): JSX.Element {
               type="button"
               key={course.id}
               className={`recent-files__filter${selectedCourseId === course.id ? ' is-active' : ''}`}
-              style={{ '--course-accent': courseColor(course.id) } as CSSProperties}
               title={course.displayName}
               aria-pressed={selectedCourseId === course.id}
               onClick={() => setSelectedCourseId(course.id)}

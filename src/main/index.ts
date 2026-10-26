@@ -30,14 +30,16 @@ let mainWindow: Awaited<ReturnType<typeof createMainWindow>> | null = null
 let appTray: AppTray | null = null
 let scheduler: SyncScheduler | null = null
 
+app.setName(APP_NAME)
+// Set the stable user-data path before Electron creates the instance lock.
+// Otherwise a duplicate launch can create a second, lower-case config folder.
+app.setPath('userData', join(app.getPath('appData'), 'UniPD Dispense'))
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
-  app.setName(APP_NAME)
-  // Keep the existing settings and encrypted session after the product rename.
-  app.setPath('userData', join(app.getPath('appData'), 'UniPD Dispense'))
   app.setAppUserModelId(APP_ID)
   configureKeyringBackend()
 

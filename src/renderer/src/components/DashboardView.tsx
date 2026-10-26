@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useAppStore } from '../store'
-import { courseColor, formatDateTime, initials, pluralize } from '../utils'
+import { formatDateTime, initials, pluralize } from '../utils'
 import {
   AlertIcon,
   BookIcon,
@@ -149,7 +149,6 @@ export function DashboardView(): JSX.Element {
                 <li key={course.id}>
                   <span
                     className="course-dot"
-                    style={{ background: courseColor(course.id) }}
                     aria-hidden="true"
                   >
                     {initials(course.displayName)}

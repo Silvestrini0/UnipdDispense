@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react'
+import { useEffect, useState, type JSX } from 'react'
 import type { AccentColor, AppSettings, ThemeMode } from '../../../shared/types'
 import { useAppStore } from '../store'
 import { AppearancePicker } from './AppearancePicker'
@@ -16,11 +16,28 @@ export function AppearanceModal({ settings }: AppearanceModalProps): JSX.Element
   const [accentColor, setAccentColor] = useState<AccentColor>(settings.accentColor)
   const [launchAtLogin, setLaunchAtLogin] = useState(settings.launchAtLogin)
 
+  useEffect(() => {
+    const root = document.documentElement
+    root.dataset.theme = themeMode
+    root.dataset.accent = accentColor
+    root.style.colorScheme = themeMode
+  }, [themeMode, accentColor])
+
   const save = (): void => {
     void saveSettings({
       themeMode,
       accentColor,
       launchAtLogin,
+      personalizationCompleted: true
+    })
+  }
+
+  const skip = (): void => {
+    setThemeMode(settings.themeMode)
+    setAccentColor(settings.accentColor)
+    void saveSettings({
+      themeMode: settings.themeMode,
+      accentColor: settings.accentColor,
       personalizationCompleted: true
     })
   }
@@ -66,7 +83,7 @@ export function AppearanceModal({ settings }: AppearanceModalProps): JSX.Element
           <button
             type="button"
             className="button button--ghost"
-            onClick={() => void saveSettings({ personalizationCompleted: true })}
+            onClick={skip}
             disabled={saving}
           >
             Salta per ora

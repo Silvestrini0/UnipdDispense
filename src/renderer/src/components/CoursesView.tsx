@@ -2,7 +2,6 @@ import { useMemo, useState, type JSX } from 'react'
 import type { CourseSummary } from '../../../shared/types'
 import { useAppStore } from '../store'
 import {
-  courseColor,
   formatUnixDate,
   initials,
   pluralize
@@ -229,7 +228,6 @@ export function CoursesView(): JSX.Element {
                 </span>
                 <span
                   className="course-avatar"
-                  style={{ background: courseColor(course.id) }}
                   aria-hidden="true"
                 >
                   {initials(course.displayName)}
