@@ -23,13 +23,13 @@ linux:
   category: Education
   syncDesktopName: true
   icon: resources/icon.png
-  artifactName: UnipdDispense-${version}-${arch}.${ext}
+  artifactName: UnipdDispense-Linux-${version}-${arch}.${ext}
 win:
   target:
     - nsis
     - zip
   icon: resources/icon.png
-  artifactName: UnipdDispense-Setup-${version}-${arch}.${ext}
+  artifactName: UnipdDispense-Windows-${version}-${arch}.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -43,4 +43,4 @@ mac:
     - zip
   icon: resources/icon.png
   category: public.app-category.education
-  artifactName: UnipdDispense-${version}-${arch}.${ext}
+  artifactName: UnipdDispense-macOS-${version}-${arch}.${ext}

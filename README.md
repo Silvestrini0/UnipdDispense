@@ -19,12 +19,12 @@ Su Ubuntu, se l'icona dell'app nell'area di notifica non compare, installa il su
 
 ### Windows
 
-Scarica e avvia **UnipdDispense-Setup-...-x64.exe** per installare l'app. In alternativa, estrai il file **.zip** ed esegui l'applicazione dalla cartella estratta.
+Scarica e avvia **UnipdDispense-Windows-...-x64.exe** per installare l'app. In alternativa, estrai il file **.zip** ed esegui l'applicazione dalla cartella estratta.
 
 Le build Windows non sono firmate. Scarica l'installer solo dalla pagina [Releases ufficiale](https://github.com/Silvestrini0/UnipdDispense/releases) e, se Windows lo blocca, usa una delle procedure seguenti:
 
 - **Avviso SmartScreen:** seleziona **Ulteriori informazioni** e poi **Esegui comunque**.
-- **Smart App Control o blocco del file scaricato:** fai clic destro sull'installer, apri **Proprietà**, seleziona **Annulla blocco** nella sezione Sicurezza e premi **Applica**. Se la casella non compare, apri PowerShell ed esegui `Unblock-File -Path "$env:USERPROFILE\Downloads\UnipdDispense-Setup-*-x64.exe"`.
+- **Smart App Control o blocco del file scaricato:** fai clic destro sull'installer, apri **Proprietà**, seleziona **Annulla blocco** nella sezione Sicurezza e premi **Applica**. Se la casella non compare, apri PowerShell ed esegui `Unblock-File -Path "$env:USERPROFILE\Downloads\UnipdDispense-Windows-*-x64.exe"`.
 
 Questa operazione rimuove il contrassegno di provenienza Internet dal file selezionato; non disattiva Smart App Control né altre protezioni di Windows. Controlla che il file provenga dalla release ufficiale prima di sbloccarlo.
 
