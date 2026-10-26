@@ -2959,6 +2959,10 @@ code {
     flex: 1;
   }
 
+  .topbar__actions .button--update:not(.button--update-icon) {
+    flex: 1;
+  }
+
   .update-banner {
     align-items: flex-start;
     flex-wrap: wrap;

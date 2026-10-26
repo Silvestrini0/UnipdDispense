@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { accessSync, constants, readFileSync } from 'node:fs'
+import { delimiter, isAbsolute, join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import { IPC } from '../shared/ipc'
@@ -33,6 +34,8 @@ export class UpdateService {
   private downloadCancellationToken: CancellationToken | null = null
   private macDownloadController: AbortController | null = null
   private installationPending = false
+  private linuxUpdateFile: string | null = null
+  private completedDownloadVersion: string | null = null
 
   constructor(
     private readonly getMainWindow: () => BrowserWindow | null,
@@ -81,6 +84,8 @@ export class UpdateService {
       }
     })
     autoUpdater.on('update-not-available', () => {
+      this.linuxUpdateFile = null
+      this.completedDownloadVersion = null
       this.update({
         state: 'idle',
         availableVersion: null,
@@ -93,6 +98,12 @@ export class UpdateService {
       this.update({ state: 'downloading', percent: progress.percent })
     })
     autoUpdater.on('update-downloaded', (info) => {
+      this.completedDownloadVersion = info.version
+      if (this.usesLinuxPackageInstaller()) {
+        // Wait for downloadUpdate() to return its verified package path before
+        // exposing the install action to the renderer.
+        return
+      }
       this.update({
         state: 'downloaded',
         availableVersion: info.version,
@@ -103,6 +114,11 @@ export class UpdateService {
     autoUpdater.on('error', (error) => {
       if (this.downloadCancellationToken?.cancelled) return
       logger.error('Aggiornamento non riuscito:', error)
+      if (this.installationPending) {
+        this.installationPending = false
+        this.update({ state: 'downloaded', error: readableError(error) })
+        return
+      }
       this.update({ state: 'error', error: readableError(error) })
     })
 
@@ -174,6 +190,8 @@ export class UpdateService {
     const macDownloadController = process.platform === 'darwin' ? new AbortController() : null
     this.downloadCancellationToken = cancellationToken
     this.macDownloadController = macDownloadController
+    this.linuxUpdateFile = null
+    this.completedDownloadVersion = null
     this.update({ state: 'downloading', percent: 0, error: null })
     if (process.platform === 'darwin') {
       if (!this.macUpdate) {
@@ -209,7 +227,20 @@ export class UpdateService {
       return
     }
     try {
-      await autoUpdater.downloadUpdate(cancellationToken ?? undefined)
+      const downloadedFiles = await autoUpdater.downloadUpdate(cancellationToken ?? undefined)
+      if (this.usesLinuxPackageInstaller()) {
+        const downloadedFile = downloadedFiles[0]
+        if (!downloadedFile) {
+          throw new Error('Il pacchetto Linux scaricato non è disponibile per l’installazione.')
+        }
+        this.linuxUpdateFile = downloadedFile
+        this.update({
+          state: 'downloaded',
+          availableVersion: this.completedDownloadVersion ?? this.status.availableVersion,
+          percent: 100,
+          error: null
+        })
+      }
     } catch (error) {
       if (!cancellationToken?.cancelled) {
         this.update({ state: 'error', error: readableError(error) })
@@ -258,13 +289,39 @@ export class UpdateService {
         .catch((error) => {
           this.installationPending = false
           logger.error('Installazione aggiornamento Mac non riuscita:', error)
-          this.update({ state: 'error', error: readableError(error) })
+          this.update({ state: 'downloaded', error: readableError(error) })
         })
       return
     }
     this.installationPending = true
     this.update({ state: 'installing', error: null })
+    const packageType = this.usesLinuxPackageInstaller() ? getLinuxPackageType() : null
+    if (packageType && findExecutable('pkexec')) {
+      if (!this.linuxUpdateFile) {
+        this.installationPending = false
+        this.update({
+          state: 'downloaded',
+          error: 'Il pacchetto Linux scaricato non è più disponibile. Scaricalo di nuovo.'
+        })
+        return
+      }
+      void installLinuxPackage(this.linuxUpdateFile, packageType)
+        .then(() => {
+          app.relaunch()
+          app.quit()
+        })
+        .catch((error) => {
+          this.installationPending = false
+          logger.error('Installazione aggiornamento Linux non riuscita:', error)
+          this.update({ state: 'downloaded', error: readableError(error) })
+        })
+      return
+    }
     autoUpdater.quitAndInstall(true, true)
+  }
+
+  private usesLinuxPackageInstaller(): boolean {
+    return process.platform === 'linux' && getLinuxPackageType() !== null
   }
 
   async openSecuritySettings(): Promise<void> {
@@ -316,15 +373,94 @@ export class UpdateService {
 }
 
 function isSupportedLinuxPackage(): boolean {
-  if (process.env.APPIMAGE) {
-    return true
-  }
+  return Boolean(process.env.APPIMAGE) || getLinuxPackageType() !== null
+}
+
+type LinuxPackageType = 'deb' | 'rpm'
+
+interface LinuxInstallCommand {
+  executable: string
+  args: string[]
+}
+
+function getLinuxPackageType(): LinuxPackageType | null {
+  if (process.platform !== 'linux' || process.env.APPIMAGE) return null
   try {
     const packageType = readFileSync(join(process.resourcesPath, 'package-type'), 'utf8').trim()
-    return packageType === 'deb' || packageType === 'rpm'
+    return packageType === 'deb' || packageType === 'rpm' ? packageType : null
   } catch {
-    return false
+    return null
   }
+}
+
+function findExecutable(name: string): string | null {
+  for (const directory of (process.env.PATH ?? '').split(delimiter)) {
+    if (!directory || !isAbsolute(directory)) continue
+    const candidate = join(directory, name)
+    try {
+      accessSync(candidate, constants.X_OK)
+      return candidate
+    } catch {
+      // Continue through PATH; the updater should report a clear error if no tool exists.
+    }
+  }
+  return null
+}
+
+function linuxInstallCommand(
+  packageType: LinuxPackageType,
+  packagePath: string
+): LinuxInstallCommand {
+  const candidates = packageType === 'rpm'
+    ? [
+        { name: 'zypper', args: ['--non-interactive', '--no-refresh', 'install', '--allow-unsigned-rpm', '-f', packagePath] },
+        { name: 'dnf', args: ['install', '--nogpgcheck', '-y', packagePath] },
+        { name: 'yum', args: ['install', '--nogpgcheck', '-y', packagePath] },
+        { name: 'rpm', args: ['-Uvh', '--replacepkgs', '--replacefiles', '--nodeps', packagePath] }
+      ]
+    : [
+        { name: 'apt-get', args: ['install', '--allow-unauthenticated', '-y', packagePath] },
+        { name: 'dpkg', args: ['-i', packagePath] }
+      ]
+  for (const candidate of candidates) {
+    const executable = findExecutable(candidate.name)
+    if (executable) return { executable, args: candidate.args }
+  }
+  throw new Error(`Non trovo un gestore pacchetti compatibile con il formato ${packageType.toUpperCase()}.`)
+}
+
+async function installLinuxPackage(packagePath: string, packageType: LinuxPackageType): Promise<void> {
+  const pkexec = findExecutable('pkexec')
+  if (!pkexec) throw new Error('pkexec non è disponibile per autorizzare l’aggiornamento di sistema.')
+  const command = linuxInstallCommand(packageType, packagePath)
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(pkexec, [command.executable, ...command.args], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    let output = ''
+    let errorOutput = ''
+    child.stdout?.on('data', (chunk: Buffer) => {
+      output = `${output}${chunk.toString()}`.slice(-4000)
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      errorOutput = `${errorOutput}${chunk.toString()}`.slice(-4000)
+    })
+    child.on('error', (error) => reject(error))
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+      const exitReason = code === null ? `segnale ${signal ?? 'sconosciuto'}` : `codice ${code}`
+      const detail = errorOutput.trim() || output.trim()
+      reject(
+        new Error(
+          `Installazione con ${command.executable.split('/').pop()} non riuscita (${exitReason}).${detail ? ` ${detail}` : ''}`
+        )
+      )
+    })
+  })
 }
 
 function readableError(error: unknown): string {

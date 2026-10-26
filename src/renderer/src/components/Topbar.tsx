@@ -33,17 +33,21 @@ export function Topbar(): JSX.Element {
   const openVault = useAppStore((state) => state.openVault)
   const downloadUpdate = useAppStore((state) => state.downloadUpdate)
   const cancelUpdateDownload = useAppStore((state) => state.cancelUpdateDownload)
+  const installUpdate = useAppStore((state) => state.installUpdate)
   const hasSelection =
     Boolean(settings?.syncAllCourses) || (settings?.selectedCourseIds.length ?? 0) > 0
   const showUpdateButton =
     update.state === 'available' ||
     update.state === 'downloading' ||
     update.state === 'canceling' ||
+    update.state === 'downloaded' ||
     (update.state === 'error' && update.availableVersion !== null)
 
   const handleUpdateAction = (): void => {
     if (update.state === 'downloading') {
       void cancelUpdateDownload()
+    } else if (update.state === 'downloaded') {
+      void installUpdate()
     } else if (
       update.state === 'available' ||
       (update.state === 'error' && update.availableVersion)
@@ -71,15 +75,22 @@ export function Topbar(): JSX.Element {
         {update.supported && showUpdateButton && (
           <button
             type="button"
-            className="button button--update button--update-icon"
+            className={`button button--update${update.state === 'downloaded' ? '' : ' button--update-icon'}`}
             onClick={handleUpdateAction}
-            disabled={update.state === 'canceling'}
+            disabled={
+              update.state === 'canceling' ||
+              (update.state === 'downloaded' && sync.running)
+            }
             aria-label={
               update.state === 'downloading'
                 ? 'Interrompi il download dell’aggiornamento'
                 : update.state === 'canceling'
                   ? 'Interruzione del download in corso'
-                  : 'Scarica aggiornamento'
+                  : update.state === 'downloaded'
+                    ? update.error
+                      ? 'Riprova installazione aggiornamento'
+                      : 'Riavvia e aggiorna'
+                    : 'Scarica aggiornamento'
             }
             aria-busy={update.state === 'downloading' || update.state === 'canceling'}
             title={
@@ -87,10 +98,19 @@ export function Topbar(): JSX.Element {
                 ? `Interrompi il download (${Math.round(update.percent)}%)`
                 : update.state === 'canceling'
                   ? 'Interruzione del download…'
-                  : update.error ?? `Scarica la versione ${update.availableVersion}`
+                  : update.state === 'downloaded'
+                    ? update.error ?? `Riavvia e aggiorna alla versione ${update.availableVersion}`
+                    : update.error ?? `Scarica la versione ${update.availableVersion}`
             }
           >
-            <DownloadIcon />
+            {update.state === 'downloaded' ? (
+              <>
+                <SyncIcon />
+                <span>{update.error ? 'Riprova installazione' : 'Riavvia e aggiorna'}</span>
+              </>
+            ) : (
+              <DownloadIcon />
+            )}
           </button>
         )}
         <button

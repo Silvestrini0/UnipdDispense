@@ -10,7 +10,6 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
   const update = useAppStore((state) => state.update)
   const sync = useAppStore((state) => state.sync)
   const platform = useAppStore((state) => state.info?.platform)
-  const installUpdate = useAppStore((state) => state.installUpdate)
   const openSecuritySettings = useAppStore((state) => state.openUpdateSecuritySettings)
 
   if (
@@ -22,9 +21,11 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
   }
 
   const version = update.availableVersion
-  const error = update.state === 'error'
+  const error = update.state === 'error' || update.error !== null
   const title = error
-    ? 'Aggiornamento non riuscito'
+    ? update.state === 'downloaded'
+      ? 'Installazione aggiornamento non riuscita'
+      : 'Aggiornamento non riuscito'
     : update.state === 'downloaded'
       ? `La versione ${version} è pronta`
       : update.state === 'installing'
@@ -54,9 +55,9 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
                 ? 'La sincronizzazione è in corso. Potrai installare l’aggiornamento al termine.'
                 : platform === 'darwin'
                   ? 'Puoi aprire Privacy e Sicurezza prima di installare. Dopo il riavvio, se macOS blocca l’app, premi Apri comunque e conferma Apri.'
-                  : 'Riavvia l’app per completare l’installazione.'
+                  : 'Premi «Riavvia e aggiorna» in alto per installarlo.'
               : update.state === 'installing'
-                ? 'Attendi il completamento della preparazione. La sincronizzazione è temporaneamente sospesa.'
+                ? 'L’app si chiuderà e si riavvierà quando l’installazione sarà terminata.'
                 : update.state === 'canceling'
                   ? 'Sto arrestando il download in modo sicuro.'
               : update.state === 'downloading'
@@ -76,29 +77,15 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
           </div>
         )}
       </div>
-      {update.state === 'downloaded' && (floating || platform === 'darwin') && (
+      {update.state === 'downloaded' && platform === 'darwin' && (
         <div className="update-banner__actions">
-          {platform === 'darwin' && (
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => void openSecuritySettings()}
-            >
-              Apri Privacy e Sicurezza
-            </button>
-          )}
-          {floating && (
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={() => void installUpdate()}
-              disabled={sync.running}
-              title={sync.running ? 'Attendi il completamento della sincronizzazione' : undefined}
-            >
-              <DownloadIcon />
-              Riavvia e installa
-            </button>
-          )}
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => void openSecuritySettings()}
+          >
+            Apri Privacy e Sicurezza
+          </button>
         </div>
       )}
     </section>
