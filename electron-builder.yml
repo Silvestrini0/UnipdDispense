@@ -7,6 +7,10 @@ files:
   - out/**/*
   - package.json
 asar: true
+publish:
+  provider: github
+  owner: Silvestrini0
+  repo: UnipdDispense
 extraResources:
   - from: resources
     to: .
@@ -19,7 +23,6 @@ linux:
     - AppImage
     - deb
     - rpm
-    - tar.gz
   category: Education
   syncDesktopName: true
   icon: resources/icon.png
@@ -27,7 +30,6 @@ linux:
 win:
   target:
     - nsis
-    - zip
   icon: resources/icon.png
   artifactName: UnipdDispense-Windows-${version}-${arch}.${ext}
 nsis:
@@ -35,8 +37,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
 mac:
-  # Re-sign the packaged Electron bundle even without an Apple certificate.
-  # Otherwise its original linker signature is invalid after packaging on arm64.
+  # Ad-hoc signing preserves bundle integrity; Mac updates use the app's GitHub updater.
   identity: '-'
   target:
     - dmg

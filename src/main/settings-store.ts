@@ -12,6 +12,7 @@ const settingsSchema = z.object({
   personalizationCompleted: z.boolean().default(true),
   syncIntervalMinutes: z.number().int().min(5).max(1440),
   autoSync: z.boolean(),
+  autoUpdates: z.boolean().default(true),
   launchAtLogin: z.boolean(),
   syncAllCourses: z.boolean(),
   selectedCourseIds: z.array(z.number().int().positive()),

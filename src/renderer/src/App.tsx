@@ -9,6 +9,7 @@ import { Notice } from './components/Notice'
 import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { Topbar } from './components/Topbar'
+import { UpdateBanner } from './components/UpdateBanner'
 import { useAppStore } from './store'
 
 export default function App(): JSX.Element {
@@ -55,6 +56,7 @@ export default function App(): JSX.Element {
     return (
       <>
         <LoginView />
+        <UpdateBanner floating />
         <Notice />
       </>
     )
@@ -65,6 +67,7 @@ export default function App(): JSX.Element {
       <Sidebar />
       <main className="main">
         <Topbar />
+        <UpdateBanner />
         <div className="main__content">
           {view === 'dashboard' && <DashboardView />}
           {view === 'courses' && <CoursesView />}

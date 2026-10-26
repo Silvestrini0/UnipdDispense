@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, type DesktopApi } from '../shared/ipc'
 import type {
   AppSettings,
+  AppUpdateStatus,
   AuthStatus,
   SyncProgress
 } from '../shared/types'
@@ -56,6 +57,14 @@ const api: DesktopApi = {
     getStatus: () => ipcRenderer.invoke(IPC.syncStatus),
     onProgress: (callback) =>
       subscribe<SyncProgress>(IPC.syncProgress, callback)
+  },
+  updates: {
+    check: () => ipcRenderer.invoke(IPC.updatesCheck),
+    download: () => ipcRenderer.invoke(IPC.updatesDownload),
+    install: () => ipcRenderer.invoke(IPC.updatesInstall),
+    openSecuritySettings: () => ipcRenderer.invoke(IPC.updatesOpenSecuritySettings),
+    onChange: (callback) =>
+      subscribe<AppUpdateStatus>(IPC.updatesChanged, callback)
   }
 }
 

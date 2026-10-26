@@ -23,28 +23,25 @@ jobs:
               dist/*.AppImage
               dist/*.deb
               dist/*.rpm
-              dist/*.tar.gz
+              dist/*.yml
+              dist/*.blockmap
           - runner: windows-latest
             platform: win
             arch: x64
             artifact: windows-x64
             files: |
               dist/*.exe
-              dist/*.zip
-          - runner: macos-15-intel
-            platform: mac
-            arch: x64
-            artifact: macos-x64
-            files: |
-              dist/*.dmg
-              dist/*.zip
+              dist/*.yml
+              dist/*.blockmap
           - runner: macos-latest
             platform: mac
-            arch: arm64
-            artifact: macos-arm64
+            arch: multi
+            artifact: macos-x64-arm64
             files: |
               dist/*.dmg
               dist/*.zip
+              dist/*.yml
+              dist/*.blockmap
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out source
@@ -67,7 +64,13 @@ jobs:
         run: npm run build
 
       - name: Package for this platform
-        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+        shell: bash
+        run: |
+          if [ "${{ matrix.arch }}" = "multi" ]; then
+            npx electron-builder --${{ matrix.platform }} --x64 --arm64 --publish never
+          else
+            npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+          fi
 
       - name: Upload packages
         uses: actions/upload-artifact@v4

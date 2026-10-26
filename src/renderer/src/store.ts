@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   AppInfo,
   AppSettings,
+  AppUpdateStatus,
   AuthStatus,
   CourseSummary,
   MaterialFile,
@@ -26,6 +27,7 @@ interface AppStore {
   settings: AppSettings | null
   auth: AuthStatus | null
   sync: SyncProgress
+  update: AppUpdateStatus
   courses: CourseSummary[]
   coursesLoading: boolean
   coursesError: string | null
@@ -51,6 +53,10 @@ interface AppStore {
   startFreshSync: () => Promise<void>
   openVault: () => Promise<void>
   quit: () => Promise<void>
+  checkForUpdate: () => Promise<void>
+  downloadUpdate: () => Promise<void>
+  installUpdate: () => Promise<void>
+  openUpdateSecuritySettings: () => Promise<void>
   dismissNotice: () => void
 }
 
@@ -83,6 +89,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
   settings: null,
   auth: null,
   sync: emptySync,
+  update: {
+    supported: false,
+    state: 'unsupported',
+    currentVersion: '',
+    availableVersion: null,
+    percent: 0,
+    error: null
+  },
   courses: [],
   coursesLoading: false,
   coursesError: null,
@@ -105,6 +119,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         set({
           info: snapshot.info,
           settings: snapshot.settings,
+          update: snapshot.update,
           auth: snapshot.auth,
           sync: snapshot.sync,
           initialized: true,
@@ -339,6 +354,38 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+  checkForUpdate: async () => {
+    try {
+      await window.api.updates.check()
+    } catch (error) {
+      set({ notice: makeNotice('error', messageFrom(error)) })
+    }
+  },
+
+  downloadUpdate: async () => {
+    try {
+      await window.api.updates.download()
+    } catch (error) {
+      set({ notice: makeNotice('error', messageFrom(error)) })
+    }
+  },
+
+  installUpdate: async () => {
+    try {
+      await window.api.updates.install()
+    } catch (error) {
+      set({ notice: makeNotice('error', messageFrom(error)) })
+    }
+  },
+
+  openUpdateSecuritySettings: async () => {
+    try {
+      await window.api.updates.openSecuritySettings()
+    } catch (error) {
+      set({ notice: makeNotice('error', messageFrom(error)) })
+    }
+  },
+
   dismissNotice: () => set({ notice: null })
 }))
 
@@ -371,6 +418,9 @@ function subscribeToEvents(
     if (sync.phase === 'completed' || sync.phase === 'paused') {
       void get().refreshMaterials()
     }
+  })
+  window.api.updates.onChange((update) => {
+    set({ update })
   })
 }
 

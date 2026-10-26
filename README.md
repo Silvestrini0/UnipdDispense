@@ -6,20 +6,20 @@ UnipdDispense è un'applicazione desktop che sincronizza i materiali dei corsi M
 
 ## Installazione
 
-Scarica l'ultima versione dalla pagina [Releases](https://github.com/Silvestrini0/UnipdDispense/releases/latest). I pacchetti vengono generati per Linux, Windows e macOS quando viene pubblicata una release.
+I pacchetti vengono generati per Linux, Windows e macOS quando viene pubblicata una release. Le nuove versioni vengono segnalate nell’app e possono essere scaricate dal pulsante di aggiornamento. Gli aggiornamenti automatici si possono attivare o disattivare nelle impostazioni. L’installazione tramite updater è disponibile per Windows (installer), Linux (AppImage) e macOS; i pacchetti Linux **.deb** e **.rpm** vanno aggiornati tramite il rispettivo gestore pacchetti.
 
 ### Linux
 
 - **AppImage:** scarica il file **.AppImage**, rendilo eseguibile dalle proprietà del file oppure esegui chmod +x UnipdDispense-*.AppImage, quindi avvialo.
 - **Debian e Ubuntu:** scarica il file **.deb** e installalo con sudo apt install ./UnipdDispense-*.deb dalla cartella in cui si trova.
 - **Fedora e distribuzioni compatibili:** scarica il file **.rpm** e installalo con sudo dnf install ./UnipdDispense-*.rpm.
-- **Altre distribuzioni:** estrai il pacchetto **.tar.gz** e avvia l'applicazione contenuta nella cartella estratta.
+- **Altre distribuzioni:** usa il pacchetto **AppImage**, che non richiede installazione ed è aggiornabile dall’app.
 
 Su Ubuntu, se l'icona dell'app nell'area di notifica non compare, installa il supporto AppIndicator con `sudo apt install libayatana-appindicator3-1`.
 
 ### Windows
 
-Scarica e avvia **UnipdDispense-Windows-...-x64.exe** per installare l'app. In alternativa, estrai il file **.zip** ed esegui l'applicazione dalla cartella estratta.
+Scarica e avvia **UnipdDispense-Windows-...-x64.exe** per installare l'app. L’updater integrato è disponibile per l’installazione tramite questo installer.
 
 Le build Windows non sono firmate. Scarica l'installer solo dalla pagina [Releases ufficiale](https://github.com/Silvestrini0/UnipdDispense/releases) e, se Windows lo blocca, usa una delle procedure seguenti:
 
@@ -32,9 +32,7 @@ Questa operazione rimuove il contrassegno di provenienza Internet dal file selez
 
 Scarica il file **.dmg**, aprilo e trascina l'app in Applicazioni. È disponibile anche un archivio **.zip**. Sono pubblicati pacchetti per Mac Intel (x64) e Apple Silicon (arm64).
 
-Su macOS potrebbero comparire avvisi perché le build non sono notarizzate.
-
-I pacchetti macOS usano una firma ad hoc per mantenere valida l'integrità del bundle anche su Apple Silicon. Questa firma non certifica l'identità dello sviluppatore e non sostituisce la notarizzazione Apple.
+Le build macOS usano una firma ad hoc e non sono notarizzate. L’updater scarica e installa la release dal repository GitHub; può essere richiesta la password dell’amministratore per sostituire l’app in Applicazioni. Se Gatekeeper blocca la nuova versione, apri l’app una volta, poi vai in **Impostazioni di Sistema > Privacy e Sicurezza > Apri comunque** e conferma **Apri**. Puoi aprire questa schermata dal pulsante nell’app prima di riavviarla.
 
 ## Come funziona
 
@@ -61,7 +59,9 @@ Per creare una build locale per il sistema in uso:
     npm run build
     npm run dist
 
-I pacchetti vengono salvati in dist/. La creazione dei pacchetti macOS richiede macOS; il workflow GitHub Actions usa runner Linux, Windows e macOS per generare automaticamente tutti gli artefatti a ogni tag v*.
+I pacchetti vengono salvati in dist/. La creazione dei pacchetti macOS richiede macOS ma non un certificato Developer ID; il workflow GitHub Actions usa runner Linux, Windows e macOS per generare automaticamente tutti gli artefatti a ogni tag v*. Il workflow pubblica anche i metadati richiesti dall’updater.
+
+L’updater Mac verifica il checksum SHA-512 del pacchetto pubblicato prima di sostituire l’app. La conferma di Gatekeeper resta a carico dell’utente.
 
 ## Licenza
 

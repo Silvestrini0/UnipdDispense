@@ -23,12 +23,14 @@ import { applyLaunchAtLogin } from './startup'
 import { SyncScheduler } from './scheduler'
 import { SecretsStore } from './secrets-store'
 import { SettingsStore } from './settings-store'
+import { UpdateService } from './update-service'
 import { SyncService } from './sync/sync-service'
 import { createMainWindow, markQuitting } from './window'
 
 let mainWindow: Awaited<ReturnType<typeof createMainWindow>> | null = null
 let appTray: AppTray | null = null
 let scheduler: SyncScheduler | null = null
+let updater: UpdateService | null = null
 
 app.setName(APP_NAME)
 // Set the stable user-data path before Electron creates the instance lock.
@@ -50,6 +52,7 @@ if (!gotSingleInstanceLock) {
   app.on('before-quit', () => {
     markQuitting()
     scheduler?.stop()
+    updater?.stop()
   })
 
   app.on('web-contents-created', (_event, contents) => {
@@ -86,6 +89,7 @@ async function bootstrap(): Promise<void> {
     personalizationCompleted: false,
     syncIntervalMinutes: 30,
     autoSync: true,
+    autoUpdates: true,
     launchAtLogin: false,
     syncAllCourses: true,
     selectedCourseIds: [],
@@ -116,6 +120,7 @@ async function bootstrap(): Promise<void> {
     logger.warn('Ripristino dello stato di sincronizzazione non riuscito:', error)
   })
   const materials = new MaterialsService(settings, () => mainWindow)
+  updater = new UpdateService(() => mainWindow, settings)
   const info = (): AppInfo => ({
     name: APP_NAME,
     version: app.getVersion(),
@@ -138,6 +143,7 @@ async function bootstrap(): Promise<void> {
     courses,
     materials,
     sync,
+    updates: updater,
     chooseVault: () => chooseVault(settings.get().vaultPath),
     chooseFreshSyncLocation: () => chooseFreshSyncLocation(settings.get().vaultPath),
     openVault: async () => {
@@ -178,6 +184,7 @@ async function bootstrap(): Promise<void> {
     broadcast(IPC.settingsChanged, next)
     appTray?.refresh()
     scheduler?.refresh()
+    updater?.setAutomatic(next.autoUpdates)
     void applyLaunchAtLogin(next.launchAtLogin)
   })
   sync.onProgress((progress: SyncProgress) => {
@@ -189,6 +196,7 @@ async function bootstrap(): Promise<void> {
   const syncScheduler = new SyncScheduler(auth, sync, settings)
   scheduler = syncScheduler
   syncScheduler.start()
+  updater.start()
 
   mainWindow.webContents.once('did-finish-load', () => {
     void initializeSession(auth, syncScheduler)

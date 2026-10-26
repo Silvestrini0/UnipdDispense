@@ -8,6 +8,7 @@ import { useAppStore } from '../store'
 import { secureStorageLabel } from '../utils'
 import {
   AlertIcon,
+  DownloadIcon,
   ExternalIcon,
   FolderIcon,
   LogoutIcon,
@@ -26,11 +27,13 @@ export function SettingsView(): JSX.Element {
   const auth = useAppStore((state) => state.auth)
   const saving = useAppStore((state) => state.settingsSaving)
   const sync = useAppStore((state) => state.sync)
+  const update = useAppStore((state) => state.update)
   const saveSettings = useAppStore((state) => state.saveSettings)
   const chooseVault = useAppStore((state) => state.chooseVault)
   const openVault = useAppStore((state) => state.openVault)
   const logout = useAppStore((state) => state.logout)
   const quit = useAppStore((state) => state.quit)
+  const checkForUpdate = useAppStore((state) => state.checkForUpdate)
 
   if (!settings) {
     return <div className="view" />
@@ -252,6 +255,57 @@ export function SettingsView(): JSX.Element {
               disabled={saving}
               label="Avvia con il sistema"
             />
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>Aggiornamenti automatici</strong>
+              <span>Scarica le nuove versioni in background. Ti chiederemo di riavviare per installarle.</span>
+            </div>
+            <Switch
+              checked={settings.autoUpdates}
+              onChange={(checked) => void saveSettings({ autoUpdates: checked })}
+              disabled={saving || !update.supported}
+              label="Aggiornamenti automatici"
+            />
+          </div>
+          <div className={`security-box ${update.error ? 'security-box--warning' : update.supported ? 'security-box--ok' : 'security-box--warning'}`}>
+            {update.error ? <AlertIcon /> : <DownloadIcon />}
+            <div>
+              <strong>
+                {!update.supported
+                  ? 'Updater disponibile nelle versioni installate'
+                  : update.error
+                    ? 'Controllo aggiornamenti non riuscito'
+                    : update.state === 'downloaded'
+                      ? `Versione ${update.availableVersion} pronta`
+                      : update.state === 'available'
+                        ? `Disponibile la versione ${update.availableVersion}`
+                        : update.state === 'downloading'
+                          ? 'Download aggiornamento in corso'
+                          : update.state === 'checking'
+                            ? 'Controllo aggiornamenti…'
+                            : `Versione ${update.currentVersion} aggiornata`}
+              </strong>
+              <span>
+                {update.error || (!update.supported
+                  ? 'Questa funzione è attiva nelle versioni installate dei pacchetti supportati.'
+                  : update.state === 'downloaded'
+                    ? 'Riavvia l’app dal pulsante rosso per completare l’installazione.'
+                    : update.state === 'downloading'
+                      ? `${Math.round(update.percent)}% completato.`
+                      : 'Il controllo avviene all’avvio e periodicamente mentre l’app è aperta.')}
+              </span>
+            </div>
+          </div>
+          <div className="button-row">
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => void checkForUpdate()}
+              disabled={!update.supported || update.state === 'checking' || update.state === 'downloading'}
+            >
+              Controlla aggiornamenti
+            </button>
           </div>
           <dl className="info-list">
             <div>

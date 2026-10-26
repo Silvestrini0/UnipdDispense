@@ -1,6 +1,7 @@
 import type {
   AppInfo,
   AppSettings,
+  AppUpdateStatus,
   AppSnapshot,
   AuthStatus,
   CourseFolderToDelete,
@@ -36,7 +37,12 @@ export const IPC = {
   materialsList: 'materials:list',
   materialsRecentAdded: 'materials:recent-added',
   materialsOpen: 'materials:open',
-  materialsPreview: 'materials:preview'
+  materialsPreview: 'materials:preview',
+  updatesCheck: 'updates:check',
+  updatesDownload: 'updates:download',
+  updatesInstall: 'updates:install',
+  updatesOpenSecuritySettings: 'updates:open-security-settings',
+  updatesChanged: 'updates:changed'
 } as const
 
 export interface DesktopApi {
@@ -74,5 +80,12 @@ export interface DesktopApi {
     chooseFreshLocation: () => Promise<string | null>
     getStatus: () => Promise<SyncProgress>
     onProgress: (callback: (progress: SyncProgress) => void) => () => void
+  }
+  updates: {
+    check: () => Promise<void>
+    download: () => Promise<void>
+    install: () => Promise<void>
+    openSecuritySettings: () => Promise<void>
+    onChange: (callback: (status: AppUpdateStatus) => void) => () => void
   }
 }

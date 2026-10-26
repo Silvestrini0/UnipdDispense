@@ -87,6 +87,7 @@ export interface AppSettings {
   personalizationCompleted: boolean
   syncIntervalMinutes: number
   autoSync: boolean
+  autoUpdates: boolean
   launchAtLogin: boolean
   syncAllCourses: boolean
   selectedCourseIds: number[]
@@ -103,6 +104,7 @@ export type SettingsPatch = Partial<
     | 'personalizationCompleted'
     | 'syncIntervalMinutes'
     | 'autoSync'
+    | 'autoUpdates'
     | 'launchAtLogin'
     | 'syncAllCourses'
     | 'selectedCourseIds'
@@ -221,9 +223,28 @@ export interface AppInfo {
   userDataPath: string
 }
 
+export type UpdateState =
+  | 'unsupported'
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+
+export interface AppUpdateStatus {
+  supported: boolean
+  state: UpdateState
+  currentVersion: string
+  availableVersion: string | null
+  percent: number
+  error: string | null
+}
+
 export interface AppSnapshot {
   info: AppInfo
   settings: AppSettings
+  update: AppUpdateStatus
   auth: AuthStatus
   sync: SyncProgress
   courses: CourseSummary[]

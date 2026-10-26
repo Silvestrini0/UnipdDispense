@@ -969,6 +969,108 @@ code {
   padding: 0.4rem 2.1rem 2.2rem;
 }
 
+.update-banner {
+  z-index: 5;
+  display: flex;
+  width: min(1180px, calc(100% - 4.2rem));
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0.1rem auto 0.55rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgb(185 28 28 / 23%);
+  border-radius: 13px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.update-banner--error {
+  border-color: rgb(161 98 7 / 24%);
+}
+
+.update-banner__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.update-banner--error .update-banner__icon {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.update-banner__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.update-banner__copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.update-banner__copy strong {
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.update-banner__copy > span {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.button--update {
+  flex: none;
+  border-color: #b91c1c;
+  background: linear-gradient(145deg, #dc2626, #991b1b);
+  color: #fff;
+  box-shadow: 0 8px 18px -11px rgb(185 28 28 / 90%);
+}
+
+.button--update:hover:not(:disabled) {
+  border-color: #991b1b;
+  background: #991b1b;
+}
+
+.update-banner__actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.update-progress {
+  overflow: hidden;
+  height: 5px;
+  margin-top: 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+
+.update-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #dc2626;
+  transition: width 0.2s ease;
+}
+
+.update-banner--floating {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: min(700px, calc(100% - 2rem));
+  margin: 0;
+  box-shadow: var(--shadow-lg);
+}
+
 .view {
   display: flex;
   max-width: 1180px;
@@ -2732,6 +2834,10 @@ code {
     padding-inline: 1.5rem;
   }
 
+  .update-banner:not(.update-banner--floating) {
+    width: calc(100% - 3rem);
+  }
+
   .main__content {
     padding-inline: 1.5rem;
   }
@@ -2789,6 +2895,10 @@ code {
     padding: 1.2rem 1.2rem 0.9rem;
   }
 
+  .update-banner:not(.update-banner--floating) {
+    width: calc(100% - 2.4rem);
+  }
+
   .topbar__copy p {
     display: none;
   }
@@ -2835,6 +2945,29 @@ code {
 
   .topbar__actions .button--primary {
     flex: 1;
+  }
+
+  .update-banner {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .update-banner__copy {
+    flex-basis: calc(100% - 3.5rem);
+  }
+
+  .update-banner .button--update {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .update-banner__actions {
+    width: 100%;
+  }
+
+  .update-banner__actions .button {
+    width: 100%;
+    justify-content: center;
   }
 
   .hero-card {

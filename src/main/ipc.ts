@@ -15,6 +15,7 @@ import type { CourseService } from './course-service'
 import type { MaterialsService } from './materials-service'
 import type { SettingsStore } from './settings-store'
 import type { SyncService } from './sync/sync-service'
+import type { UpdateService } from './update-service'
 
 interface IpcDependencies {
   getMainWindow: () => BrowserWindow | null
@@ -24,6 +25,7 @@ interface IpcDependencies {
   courses: CourseService
   materials: MaterialsService
   sync: SyncService
+  updates: UpdateService
   chooseVault: () => Promise<string | null>
   chooseFreshSyncLocation: () => Promise<string | null>
   openVault: () => Promise<void>
@@ -39,6 +41,7 @@ export function registerIpc(dependencies: IpcDependencies): void {
     courses,
     materials,
     sync,
+    updates,
     chooseVault,
     chooseFreshSyncLocation,
     openVault,
@@ -60,6 +63,7 @@ export function registerIpc(dependencies: IpcDependencies): void {
     return {
       info: getInfo(),
       settings: settings.get(),
+      update: updates.getStatus(),
       auth: auth.getStatus(),
       sync: sync.getProgress(),
       courses: []
@@ -107,6 +111,10 @@ export function registerIpc(dependencies: IpcDependencies): void {
   handle(IPC.syncStop, () => sync.stop())
   handle(IPC.syncChooseFreshLocation, () => chooseFreshSyncLocation())
   handle(IPC.syncStatus, () => sync.getProgress())
+  handle(IPC.updatesCheck, () => updates.check())
+  handle(IPC.updatesDownload, () => updates.download())
+  handle(IPC.updatesInstall, () => updates.install())
+  handle(IPC.updatesOpenSecuritySettings, () => updates.openSecuritySettings())
 
 }
 
