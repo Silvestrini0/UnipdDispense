@@ -55,6 +55,7 @@ interface AppStore {
   quit: () => Promise<void>
   checkForUpdate: () => Promise<void>
   downloadUpdate: () => Promise<void>
+  cancelUpdateDownload: () => Promise<void>
   installUpdate: () => Promise<void>
   openUpdateSecuritySettings: () => Promise<void>
   dismissNotice: () => void
@@ -370,7 +371,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+  cancelUpdateDownload: async () => {
+    try {
+      await window.api.updates.cancelDownload()
+    } catch (error) {
+      set({ notice: makeNotice('error', messageFrom(error)) })
+    }
+  },
+
   installUpdate: async () => {
+    if (get().sync.running) {
+      set({ notice: makeNotice('info', 'Attendi il completamento della sincronizzazione prima di installare l’aggiornamento.') })
+      return
+    }
     try {
       await window.api.updates.install()
     } catch (error) {

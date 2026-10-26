@@ -61,6 +61,7 @@ const api: DesktopApi = {
   updates: {
     check: () => ipcRenderer.invoke(IPC.updatesCheck),
     download: () => ipcRenderer.invoke(IPC.updatesDownload),
+    cancelDownload: () => ipcRenderer.invoke(IPC.updatesCancelDownload),
     install: () => ipcRenderer.invoke(IPC.updatesInstall),
     openSecuritySettings: () => ipcRenderer.invoke(IPC.updatesOpenSecuritySettings),
     onChange: (callback) =>

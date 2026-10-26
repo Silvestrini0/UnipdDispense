@@ -40,6 +40,7 @@ export const IPC = {
   materialsPreview: 'materials:preview',
   updatesCheck: 'updates:check',
   updatesDownload: 'updates:download',
+  updatesCancelDownload: 'updates:cancel-download',
   updatesInstall: 'updates:install',
   updatesOpenSecuritySettings: 'updates:open-security-settings',
   updatesChanged: 'updates:changed'
@@ -84,6 +85,7 @@ export interface DesktopApi {
   updates: {
     check: () => Promise<void>
     download: () => Promise<void>
+    cancelDownload: () => Promise<void>
     install: () => Promise<void>
     openSecuritySettings: () => Promise<void>
     onChange: (callback: (status: AppUpdateStatus) => void) => () => void

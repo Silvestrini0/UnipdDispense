@@ -1038,6 +1038,18 @@ code {
   background: #991b1b;
 }
 
+.button--update-icon {
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.button--update-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
 .update-banner__actions {
   display: flex;
   flex: none;

@@ -31,34 +31,24 @@ export function Topbar(): JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const startSync = useAppStore((state) => state.startSync)
   const openVault = useAppStore((state) => state.openVault)
-  const checkForUpdate = useAppStore((state) => state.checkForUpdate)
   const downloadUpdate = useAppStore((state) => state.downloadUpdate)
-  const installUpdate = useAppStore((state) => state.installUpdate)
+  const cancelUpdateDownload = useAppStore((state) => state.cancelUpdateDownload)
   const hasSelection =
     Boolean(settings?.syncAllCourses) || (settings?.selectedCourseIds.length ?? 0) > 0
-  const updateLabel =
-    update.state === 'checking'
-      ? 'Controllo aggiornamenti…'
-      : update.state === 'available'
-        ? `Aggiorna alla versione ${update.availableVersion}`
-        : update.state === 'downloading'
-          ? `Scaricamento ${Math.round(update.percent)}%`
-          : update.state === 'downloaded'
-            ? 'Riavvia e installa'
-            : update.state === 'error'
-              ? 'Riprova aggiornamento'
-              : 'Controlla aggiornamenti'
-  const updateBusy = update.state === 'checking' || update.state === 'downloading'
+  const showUpdateButton =
+    update.state === 'available' ||
+    update.state === 'downloading' ||
+    update.state === 'canceling' ||
+    (update.state === 'error' && update.availableVersion !== null)
 
   const handleUpdateAction = (): void => {
-    if (update.state === 'available') {
+    if (update.state === 'downloading') {
+      void cancelUpdateDownload()
+    } else if (
+      update.state === 'available' ||
+      (update.state === 'error' && update.availableVersion)
+    ) {
       void downloadUpdate()
-    } else if (update.state === 'downloaded') {
-      void installUpdate()
-    } else if (update.state === 'error' && update.availableVersion) {
-      void downloadUpdate()
-    } else {
-      void checkForUpdate()
     }
   }
 
@@ -78,24 +68,43 @@ export function Topbar(): JSX.Element {
           <FolderIcon />
           <span>Apri vault</span>
         </button>
-        {update.supported && (
+        {update.supported && showUpdateButton && (
           <button
             type="button"
-            className="button button--update"
+            className="button button--update button--update-icon"
             onClick={handleUpdateAction}
-            disabled={updateBusy}
-            title={update.error ?? updateLabel}
+            disabled={update.state === 'canceling'}
+            aria-label={
+              update.state === 'downloading'
+                ? 'Interrompi il download dell’aggiornamento'
+                : update.state === 'canceling'
+                  ? 'Interruzione del download in corso'
+                  : 'Scarica aggiornamento'
+            }
+            aria-busy={update.state === 'downloading' || update.state === 'canceling'}
+            title={
+              update.state === 'downloading'
+                ? `Interrompi il download (${Math.round(update.percent)}%)`
+                : update.state === 'canceling'
+                  ? 'Interruzione del download…'
+                  : update.error ?? `Scarica la versione ${update.availableVersion}`
+            }
           >
             <DownloadIcon />
-            <span>{updateLabel}</span>
           </button>
         )}
         <button
           type="button"
           className="button button--primary"
           onClick={() => void startSync({ reason: 'manual' })}
-          disabled={sync.running || !hasSelection}
-          title={!hasSelection ? 'Seleziona almeno un corso' : undefined}
+          disabled={sync.running || !hasSelection || update.state === 'installing'}
+          title={
+            !hasSelection
+              ? 'Seleziona almeno un corso'
+              : update.state === 'installing'
+                ? 'Attendi il completamento dell’aggiornamento'
+                : undefined
+          }
         >
           <SyncIcon className={sync.running ? 'spin' : undefined} />
           <span>

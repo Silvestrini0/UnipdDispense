@@ -302,7 +302,10 @@ export function SettingsView(): JSX.Element {
               type="button"
               className="button button--ghost"
               onClick={() => void checkForUpdate()}
-              disabled={!update.supported || update.state === 'checking' || update.state === 'downloading'}
+              disabled={
+                !update.supported ||
+                ['checking', 'downloading', 'canceling', 'downloaded', 'installing'].includes(update.state)
+              }
             >
               Controlla aggiornamenti
             </button>

@@ -78,6 +78,7 @@ export class SyncService {
   private stopRequested = false
   private activeAbortController: AbortController | null = null
   private readonly listeners = new Set<ProgressListener>()
+  private startGuard: (() => string | null) | null = null
 
   constructor(
     private readonly auth: AuthService,
@@ -133,7 +134,15 @@ export class SyncService {
     return () => this.listeners.delete(listener)
   }
 
+  setStartGuard(guard: () => string | null): void {
+    this.startGuard = guard
+  }
+
   start(options: SyncOptions = {}): Promise<SyncResult> {
+    const blockedReason = this.startGuard?.()
+    if (blockedReason) {
+      return Promise.reject(new Error(blockedReason))
+    }
     if (this.runPromise) {
       if (options.freshCopyRoot) {
         return Promise.reject(

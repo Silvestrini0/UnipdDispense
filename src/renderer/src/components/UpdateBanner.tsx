@@ -8,13 +8,16 @@ interface UpdateBannerProps {
 
 export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Element | null {
   const update = useAppStore((state) => state.update)
+  const sync = useAppStore((state) => state.sync)
   const platform = useAppStore((state) => state.info?.platform)
-  const checkForUpdate = useAppStore((state) => state.checkForUpdate)
-  const downloadUpdate = useAppStore((state) => state.downloadUpdate)
   const installUpdate = useAppStore((state) => state.installUpdate)
   const openSecuritySettings = useAppStore((state) => state.openUpdateSecuritySettings)
 
-  if (!['available', 'downloading', 'downloaded', 'error'].includes(update.state)) {
+  if (
+    !['available', 'downloading', 'canceling', 'downloaded', 'installing', 'error'].includes(
+      update.state
+    )
+  ) {
     return null
   }
 
@@ -24,9 +27,13 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
     ? 'Aggiornamento non riuscito'
     : update.state === 'downloaded'
       ? `La versione ${version} è pronta`
-      : update.state === 'downloading'
-        ? `Scaricamento della versione ${version} in corso`
-        : `È disponibile la versione ${version}`
+      : update.state === 'installing'
+        ? 'Preparazione dell’aggiornamento'
+        : update.state === 'canceling'
+          ? 'Interruzione del download in corso'
+          : update.state === 'downloading'
+            ? `Scaricamento della versione ${version} in corso`
+            : `È disponibile la versione ${version}`
 
   return (
     <section
@@ -43,14 +50,20 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
           {error
             ? update.error
             : update.state === 'downloaded'
-              ? platform === 'darwin'
-                ? 'Puoi aprire Privacy e Sicurezza prima di installare. Dopo il riavvio, se macOS blocca l’app, premi Apri comunque e conferma Apri.'
-                : 'Usa il pulsante rosso in alto per riavviare e installare l’aggiornamento.'
+              ? sync.running
+                ? 'La sincronizzazione è in corso. Potrai installare l’aggiornamento al termine.'
+                : platform === 'darwin'
+                  ? 'Puoi aprire Privacy e Sicurezza prima di installare. Dopo il riavvio, se macOS blocca l’app, premi Apri comunque e conferma Apri.'
+                  : 'Riavvia l’app per completare l’installazione.'
+              : update.state === 'installing'
+                ? 'Attendi il completamento della preparazione. La sincronizzazione è temporaneamente sospesa.'
+                : update.state === 'canceling'
+                  ? 'Sto arrestando il download in modo sicuro.'
               : update.state === 'downloading'
                 ? `${Math.round(update.percent)}% completato. Puoi continuare a usare l’app.`
-                : 'È pronta per essere scaricata e installata.'}
+                : 'Premi il pulsante circolare rosso per scaricarla.'}
         </span>
-        {update.state === 'downloading' && (
+        {['downloading', 'canceling'].includes(update.state) && (
           <div
             className="update-progress"
             role="progressbar"
@@ -63,16 +76,6 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
           </div>
         )}
       </div>
-      {floating && update.state === 'available' && (
-        <button
-          type="button"
-          className="button button--update"
-          onClick={() => void downloadUpdate()}
-        >
-          <DownloadIcon />
-          Aggiorna alla versione {version}
-        </button>
-      )}
       {update.state === 'downloaded' && (floating || platform === 'darwin') && (
         <div className="update-banner__actions">
           {platform === 'darwin' && (
@@ -87,24 +90,16 @@ export function UpdateBanner({ floating = false }: UpdateBannerProps): JSX.Eleme
           {floating && (
             <button
               type="button"
-              className="button button--update"
+              className="button button--primary"
               onClick={() => void installUpdate()}
+              disabled={sync.running}
+              title={sync.running ? 'Attendi il completamento della sincronizzazione' : undefined}
             >
               <DownloadIcon />
               Riavvia e installa
             </button>
           )}
         </div>
-      )}
-      {floating && error && (
-        <button
-          type="button"
-          className="button button--update"
-          onClick={() => void (version ? downloadUpdate() : checkForUpdate())}
-        >
-          <DownloadIcon />
-          Riprova
-        </button>
       )}
     </section>
   )

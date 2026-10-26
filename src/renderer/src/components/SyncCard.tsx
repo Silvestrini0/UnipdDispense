@@ -5,6 +5,7 @@ import { AlertIcon, CheckIcon, ClockIcon, SyncIcon } from './Icons'
 
 export function SyncCard(): JSX.Element {
   const sync = useAppStore((state) => state.sync)
+  const update = useAppStore((state) => state.update)
   const settings = useAppStore((state) => state.settings)
   const auth = useAppStore((state) => state.auth)
   const stopSync = useAppStore((state) => state.stopSync)
@@ -91,6 +92,7 @@ export function SyncCard(): JSX.Element {
             type="button"
             className="button button--primary"
             onClick={() => void startSync({ reason: 'manual' })}
+            disabled={update.state === 'installing'}
           >
             Riprendi da dove si è fermata
           </button>
@@ -99,13 +101,20 @@ export function SyncCard(): JSX.Element {
           type="button"
           className="button button--ghost"
           onClick={() => void startFreshSync()}
-          disabled={sync.running || auth?.state !== 'authenticated' || !hasSelection}
+          disabled={
+            sync.running ||
+            update.state === 'installing' ||
+            auth?.state !== 'authenticated' ||
+            !hasSelection
+          }
           title={
             auth?.state !== 'authenticated'
               ? 'Accedi a Moodle per scaricare i materiali'
-              : !hasSelection
-                ? 'Seleziona almeno un corso'
-                : undefined
+              : update.state === 'installing'
+                ? 'Attendi il completamento dell’aggiornamento'
+                : !hasSelection
+                  ? 'Seleziona almeno un corso'
+                  : undefined
           }
         >
           Riscarica i corsi selezionati in una nuova cartella

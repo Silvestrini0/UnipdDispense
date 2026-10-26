@@ -102,7 +102,8 @@ export async function findMacUpdate(currentVersion: string): Promise<MacUpdatePa
 
 export async function downloadMacUpdate(
   update: MacUpdatePackage,
-  onProgress: (percent: number) => void
+  onProgress: (percent: number) => void,
+  signal?: AbortSignal
 ): Promise<PendingMacUpdate> {
   const updatesDirectory = join(app.getPath('userData'), 'updates')
   await mkdir(updatesDirectory, { recursive: true })
@@ -111,7 +112,9 @@ export async function downloadMacUpdate(
 
   const response = await fetch(update.url, {
     redirect: 'follow',
-    signal: AbortSignal.timeout(UPDATE_DOWNLOAD_TIMEOUT_MS),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(UPDATE_DOWNLOAD_TIMEOUT_MS)])
+      : AbortSignal.timeout(UPDATE_DOWNLOAD_TIMEOUT_MS),
     headers: { 'User-Agent': 'UnipdDispense' }
   })
   if (!response.ok || !response.body) {
@@ -120,6 +123,7 @@ export async function downloadMacUpdate(
 
   const hash = createHash('sha512')
   let transferred = 0
+  const pendingPath = join(updatesDirectory, 'pending-mac.json')
   const progress = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       transferred += chunk.length
@@ -135,23 +139,27 @@ export async function downloadMacUpdate(
       progress,
       createWriteStream(archivePath, { flags: 'wx', mode: 0o600 })
     )
+    signal?.throwIfAborted()
     const digest = hash.digest('base64')
     if (transferred !== update.size || digest !== update.sha512) {
       throw new Error('Il pacchetto scaricato non supera la verifica di integrità.')
     }
     onProgress(100)
+    signal?.throwIfAborted()
+    const pending: PendingMacUpdate = { ...update, archivePath }
+    await writeFile(pendingPath, `${JSON.stringify(pending, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600
+    })
+    signal?.throwIfAborted()
+    return pending
   } catch (error) {
-    await rm(archivePath, { force: true })
+    await Promise.all([
+      rm(archivePath, { force: true }),
+      rm(pendingPath, { force: true })
+    ])
     throw error
   }
-
-  const pending: PendingMacUpdate = { ...update, archivePath }
-  await writeFile(
-    join(updatesDirectory, 'pending-mac.json'),
-    `${JSON.stringify(pending, null, 2)}\n`,
-    { encoding: 'utf8', mode: 0o600 }
-  )
-  return pending
 }
 
 export async function loadPendingMacUpdate(currentVersion: string): Promise<PendingMacUpdate | null> {

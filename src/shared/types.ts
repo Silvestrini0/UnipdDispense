@@ -229,7 +229,9 @@ export type UpdateState =
   | 'checking'
   | 'available'
   | 'downloading'
+  | 'canceling'
   | 'downloaded'
+  | 'installing'
   | 'error'
 
 export interface AppUpdateStatus {

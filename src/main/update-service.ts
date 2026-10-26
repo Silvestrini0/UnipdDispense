@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
-import { autoUpdater } from 'electron-updater'
+import { autoUpdater, CancellationToken } from 'electron-updater'
 import { IPC } from '../shared/ipc'
 import type { AppUpdateStatus } from '../shared/types'
 import { logger } from './logger'
@@ -30,14 +30,22 @@ export class UpdateService {
   private started = false
   private macUpdate: MacUpdatePackage | null = null
   private macArchivePath: string | null = null
+  private downloadCancellationToken: CancellationToken | null = null
+  private macDownloadController: AbortController | null = null
+  private installationPending = false
 
   constructor(
     private readonly getMainWindow: () => BrowserWindow | null,
-    private readonly settings: SettingsStore
+    private readonly settings: SettingsStore,
+    private readonly isSyncRunning: () => boolean = () => false
   ) {}
 
   getStatus(): AppUpdateStatus {
     return structuredClone(this.status)
+  }
+
+  get isInstalling(): boolean {
+    return this.installationPending
   }
 
   start(): void {
@@ -81,6 +89,7 @@ export class UpdateService {
       })
     })
     autoUpdater.on('download-progress', (progress) => {
+      if (this.status.state === 'canceling') return
       this.update({ state: 'downloading', percent: progress.percent })
     })
     autoUpdater.on('update-downloaded', (info) => {
@@ -92,6 +101,7 @@ export class UpdateService {
       })
     })
     autoUpdater.on('error', (error) => {
+      if (this.downloadCancellationToken?.cancelled) return
       logger.error('Aggiornamento non riuscito:', error)
       this.update({ state: 'error', error: readableError(error) })
     })
@@ -115,7 +125,14 @@ export class UpdateService {
   }
 
   async check(): Promise<void> {
-    if (!this.status.supported || this.status.state === 'downloading' || this.status.state === 'downloaded') {
+    if (
+      !this.status.supported ||
+      this.status.state === 'checking' ||
+      this.status.state === 'downloading' ||
+      this.status.state === 'canceling' ||
+      this.status.state === 'downloaded' ||
+      this.status.state === 'installing'
+    ) {
       return
     }
     this.update({ state: 'checking', error: null })
@@ -145,19 +162,31 @@ export class UpdateService {
 
   async download(): Promise<void> {
     const canRetry = this.status.state === 'error' && this.status.availableVersion !== null
-    if (!this.status.supported || (this.status.state !== 'available' && !canRetry)) {
+    if (
+      !this.status.supported ||
+      this.status.state === 'downloading' ||
+      this.status.state === 'canceling' ||
+      (this.status.state !== 'available' && !canRetry)
+    ) {
       return
     }
+    const cancellationToken = process.platform === 'darwin' ? null : new CancellationToken()
+    const macDownloadController = process.platform === 'darwin' ? new AbortController() : null
+    this.downloadCancellationToken = cancellationToken
+    this.macDownloadController = macDownloadController
     this.update({ state: 'downloading', percent: 0, error: null })
     if (process.platform === 'darwin') {
       if (!this.macUpdate) {
+        this.macDownloadController = null
         this.update({ state: 'error', error: 'Il pacchetto di aggiornamento Mac non è disponibile. Ricontrolla le versioni.' })
         return
       }
       try {
         const pending = await downloadMacUpdate(this.macUpdate, (percent) => {
+          if (macDownloadController?.signal.aborted || this.status.state === 'canceling') return
           this.update({ state: 'downloading', percent })
-        })
+        }, macDownloadController?.signal)
+        if (macDownloadController?.signal.aborted) return
         this.macArchivePath = pending.archivePath
         this.update({
           state: 'downloaded',
@@ -166,32 +195,75 @@ export class UpdateService {
           error: null
         })
       } catch (error) {
-        this.update({ state: 'error', error: readableError(error) })
+        if (!macDownloadController?.signal.aborted) {
+          this.update({ state: 'error', error: readableError(error) })
+        }
+      } finally {
+        if (this.macDownloadController === macDownloadController) {
+          this.macDownloadController = null
+          if (macDownloadController?.signal.aborted) {
+            this.update({ state: 'available', percent: 0, error: null })
+          }
+        }
       }
       return
     }
     try {
-      await autoUpdater.downloadUpdate()
+      await autoUpdater.downloadUpdate(cancellationToken ?? undefined)
     } catch (error) {
-      this.update({ state: 'error', error: readableError(error) })
+      if (!cancellationToken?.cancelled) {
+        this.update({ state: 'error', error: readableError(error) })
+      }
+    } finally {
+      if (this.downloadCancellationToken === cancellationToken) {
+        this.downloadCancellationToken = null
+        if (cancellationToken?.cancelled && this.getStatus().state === 'canceling') {
+          this.update({ state: 'available', percent: 0, error: null })
+        }
+      }
+    }
+  }
+
+  cancelDownload(): void {
+    if (this.status.state !== 'downloading') return
+    this.update({ state: 'canceling' })
+    if (this.downloadCancellationToken) {
+      this.downloadCancellationToken.cancel()
+    } else if (this.macDownloadController) {
+      this.macDownloadController.abort()
+    } else {
+      this.update({ state: 'available', percent: 0, error: null })
     }
   }
 
   install(): void {
-    if (!this.status.supported || this.status.state !== 'downloaded') {
+    if (
+      !this.status.supported ||
+      this.status.state !== 'downloaded' ||
+      this.installationPending
+    ) {
       return
+    }
+    if (this.isSyncRunning()) {
+      throw new Error('Attendi il completamento della sincronizzazione prima di installare l’aggiornamento.')
     }
     if (process.platform === 'darwin') {
       if (!this.macArchivePath || !this.status.availableVersion) {
         this.update({ state: 'error', error: 'Il pacchetto Mac scaricato non è più disponibile.' })
         return
       }
-      void installMacUpdate(this.macArchivePath, this.status.availableVersion).catch((error) => {
-        logger.error('Installazione aggiornamento Mac non riuscita:', error)
-        this.update({ state: 'error', error: readableError(error) })
-      })
+      this.installationPending = true
+      this.update({ state: 'installing', error: null })
+      void installMacUpdate(this.macArchivePath, this.status.availableVersion)
+        .catch((error) => {
+          this.installationPending = false
+          logger.error('Installazione aggiornamento Mac non riuscita:', error)
+          this.update({ state: 'error', error: readableError(error) })
+        })
       return
     }
+    this.installationPending = true
+    this.update({ state: 'installing', error: null })
     autoUpdater.quitAndInstall(true, true)
   }
 

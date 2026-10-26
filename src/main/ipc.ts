@@ -113,6 +113,7 @@ export function registerIpc(dependencies: IpcDependencies): void {
   handle(IPC.syncStatus, () => sync.getProgress())
   handle(IPC.updatesCheck, () => updates.check())
   handle(IPC.updatesDownload, () => updates.download())
+  handle(IPC.updatesCancelDownload, () => updates.cancelDownload())
   handle(IPC.updatesInstall, () => updates.install())
   handle(IPC.updatesOpenSecuritySettings, () => updates.openSecuritySettings())
 

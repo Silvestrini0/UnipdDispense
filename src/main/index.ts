@@ -120,7 +120,12 @@ async function bootstrap(): Promise<void> {
     logger.warn('Ripristino dello stato di sincronizzazione non riuscito:', error)
   })
   const materials = new MaterialsService(settings, () => mainWindow)
-  updater = new UpdateService(() => mainWindow, settings)
+  updater = new UpdateService(() => mainWindow, settings, () => sync.getProgress().running)
+  sync.setStartGuard(() =>
+    updater?.isInstalling
+      ? 'Attendi il completamento dell’aggiornamento prima di avviare una sincronizzazione.'
+      : null
+  )
   const info = (): AppInfo => ({
     name: APP_NAME,
     version: app.getVersion(),
