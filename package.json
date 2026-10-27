@@ -1,6 +1,6 @@
 {
   "name": "unipddispense",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "UnipdDispense sincronizza i materiali Moodle UniPD in un vault Obsidian",
   "desktopName": "unipddispense",
   "main": "./out/main/index.js",
